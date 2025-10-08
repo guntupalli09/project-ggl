@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { generateText } from '../lib/openaiClient'
+import { generateText, checkOllamaStatus, getAvailableModels, DEFAULT_MODEL } from '../lib/ollamaClient'
 import { supabase } from '../lib/supabaseClient'
 
 interface GrowthAction {
@@ -35,6 +35,33 @@ export default function DailyGrowthPlan({ onActionsGenerated }: DailyGrowthPlanP
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [dataLoading, setDataLoading] = useState(true)
+  const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+
+  // Check Ollama status and load available models
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const isRunning = await checkOllamaStatus()
+        if (isRunning) {
+          setOllamaStatus('connected')
+          const models = await getAvailableModels()
+          setAvailableModels(models)
+          if (models.length > 0 && !models.includes(selectedModel)) {
+            setSelectedModel(models[0])
+          }
+        } else {
+          setOllamaStatus('disconnected')
+        }
+      } catch (error) {
+        console.error('Error checking Ollama status:', error)
+        setOllamaStatus('disconnected')
+      }
+    }
+
+    checkStatus()
+  }, [selectedModel])
 
   // Fetch user data for AI analysis
   const fetchUserData = async () => {
@@ -103,10 +130,9 @@ export default function DailyGrowthPlan({ onActionsGenerated }: DailyGrowthPlanP
     setError('')
 
     try {
-      // Check if OpenAI API key is available
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY
-      if (!apiKey || apiKey.trim() === '') {
-        setError('OpenAI API key is not configured. Please add VITE_OPENAI_API_KEY to your .env file.')
+      // Check if Ollama is running
+      if (ollamaStatus !== 'connected') {
+        setError('Ollama is not running. Please start Ollama and ensure it\'s accessible at http://localhost:11434')
         setLoading(false)
         return
       }
@@ -150,8 +176,9 @@ Format your response as JSON with this exact structure:
   ]
 }`
 
-      console.log('Generating growth actions with prompt:', prompt)
-      const response = await generateText(prompt, 'gpt-4o-mini')
+      console.log('Generating growth actions with Ollama model:', selectedModel)
+      console.log('Prompt:', prompt)
+      const response = await generateText(prompt, selectedModel)
       console.log('Generated response:', response)
 
       try {

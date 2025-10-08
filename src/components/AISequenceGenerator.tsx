@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { generateText } from '../lib/openaiClient'
+import { useState, useEffect } from 'react'
+import { generateText, checkOllamaStatus, getAvailableModels, DEFAULT_MODEL } from '../lib/ollamaClient'
 import { supabase } from '../lib/supabaseClient'
 import { getBrandVoice, formatBrandVoiceForPrompt } from '../lib/brandVoice'
 
@@ -31,6 +31,103 @@ const TONE_OPTIONS = [
   'Consultative'
 ] as const
 
+// Helper function to repair common JSON issues
+const repairJSON = (jsonString: string): string => {
+  try {
+    // Try to parse as-is first
+    JSON.parse(jsonString)
+    return jsonString
+  } catch (error) {
+    console.log('Attempting to repair JSON...')
+    
+    let repaired = jsonString.trim()
+    
+    // Ensure it starts and ends with braces
+    if (!repaired.startsWith('{')) {
+      const startIndex = repaired.indexOf('{')
+      if (startIndex > 0) {
+        repaired = repaired.substring(startIndex)
+      }
+    }
+    
+    if (!repaired.endsWith('}')) {
+      const lastIndex = repaired.lastIndexOf('}')
+      if (lastIndex > 0) {
+        repaired = repaired.substring(0, lastIndex + 1)
+      } else {
+        // Count braces and add missing closing braces
+        const openBraces = (repaired.match(/\{/g) || []).length
+        const closeBraces = (repaired.match(/\}/g) || []).length
+        const missingBraces = openBraces - closeBraces
+        repaired += '}'.repeat(missingBraces)
+      }
+    }
+    
+    // Try to fix common issues
+    repaired = repaired.replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+    repaired = repaired.replace(/([^\\])\\([^\\"])/g, '$1\\\\$2') // Fix escaped quotes
+    
+    console.log('Repaired JSON:', repaired)
+    return repaired
+  }
+}
+
+// Helper function to extract messages from text when JSON parsing fails
+const extractMessagesFromText = (text: string): GeneratedSequence | null => {
+  try {
+    // Look for patterns like "1. Initial message:" or "Initial message:" or "Message 1:"
+    const patterns = [
+      /(?:1\.?\s*)?(?:initial\s+message|message\s+1)[:\-]?\s*(.+?)(?=\n\s*(?:2\.?\s*)?(?:follow.?up|message\s+2)|$)/is,
+      /(?:2\.?\s*)?(?:follow.?up\s+message|message\s+2)[:\-]?\s*(.+?)(?=\n\s*(?:3\.?\s*)?(?:reminder|message\s+3)|$)/is,
+      /(?:3\.?\s*)?(?:reminder\s+message|message\s+3)[:\-]?\s*(.+?)(?=\n|$)/is
+    ]
+    
+    const matches = patterns.map(pattern => {
+      const match = text.match(pattern)
+      return match ? match[1].trim() : null
+    })
+    
+    // If we found all three messages
+    if (matches[0] && matches[1] && matches[2]) {
+      return {
+        initial_message: matches[0],
+        follow_up_message: matches[1],
+        reminder_message: matches[2]
+      }
+    }
+    
+    // Try alternative patterns - look for numbered lists
+    const numberedPattern = /(\d+\.?\s*.+?)(?=\n\s*\d+\.|$)/gs
+    const numberedMatches = text.match(numberedPattern)
+    
+    if (numberedMatches && numberedMatches.length >= 3) {
+      return {
+        initial_message: numberedMatches[0].replace(/^\d+\.?\s*/, '').trim(),
+        follow_up_message: numberedMatches[1].replace(/^\d+\.?\s*/, '').trim(),
+        reminder_message: numberedMatches[2].replace(/^\d+\.?\s*/, '').trim()
+      }
+    }
+    
+    // Try to split by common separators
+    const separators = ['\n\n', '\n---\n', '\n***\n', '\n---', '\n***']
+    for (const separator of separators) {
+      const parts = text.split(separator)
+      if (parts.length >= 3) {
+        return {
+          initial_message: parts[0].trim(),
+          follow_up_message: parts[1].trim(),
+          reminder_message: parts[2].trim()
+        }
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Error in manual extraction:', error)
+    return null
+  }
+}
+
 export default function AISequenceGenerator({ contact, onSequenceGenerated, onClose }: AISequenceGeneratorProps) {
   const [formData, setFormData] = useState({
     productDescription: '',
@@ -42,6 +139,33 @@ export default function AISequenceGenerator({ contact, onSequenceGenerated, onCl
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState<{ [key: string]: boolean }>({})
+  const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+
+  // Check Ollama status and load available models
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const isRunning = await checkOllamaStatus()
+        if (isRunning) {
+          setOllamaStatus('connected')
+          const models = await getAvailableModels()
+          setAvailableModels(models)
+          if (models.length > 0 && !models.includes(selectedModel)) {
+            setSelectedModel(models[0])
+          }
+        } else {
+          setOllamaStatus('disconnected')
+        }
+      } catch (error) {
+        console.error('Error checking Ollama status:', error)
+        setOllamaStatus('disconnected')
+      }
+    }
+
+    checkStatus()
+  }, [selectedModel])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -64,10 +188,9 @@ export default function AISequenceGenerator({ contact, onSequenceGenerated, onCl
     setLoading(true)
 
     try {
-      // Check if OpenAI API key is available
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY
-      if (!apiKey || apiKey.trim() === '') {
-        setError('OpenAI API key is not configured. Please add VITE_OPENAI_API_KEY to your .env file.')
+      // Check if Ollama is running
+      if (ollamaStatus !== 'connected') {
+        setError('Ollama is not running. Please start Ollama and ensure it\'s accessible at http://localhost:11434')
         setLoading(false)
         return
       }
@@ -78,46 +201,121 @@ export default function AISequenceGenerator({ contact, onSequenceGenerated, onCl
 
       const contactInfo = contact ? `\nContact Details:\n- Name: ${contact.name}\n- Company: ${contact.company}\n- Email: ${contact.email}` : ''
       
-      const prompt = `Generate a 3-step outreach sequence for the following:
+      const prompt = `You are a professional sales outreach expert. Generate a 3-step outreach sequence.
 
 Product/Service: ${formData.productDescription}
 Target Audience: ${formData.targetAudience}
 Tone: ${formData.tone}${contactInfo}
 
-Please generate:
-1. Initial message (introduction and value proposition)
-2. Follow-up message (builds on initial contact, adds more value)
-3. Reminder message (final attempt, creates urgency)
+Create three messages:
+1. Initial message - Introduction and value proposition
+2. Follow-up message - Builds on initial contact, adds more value  
+3. Reminder message - Final attempt, creates urgency
 
 Requirements:
 - Each message should be 2-3 sentences
-- Professional but engaging
+- Professional but engaging tone: ${formData.tone}
 - Include clear call-to-action
 - Build relationship progressively
-- Match the specified tone: ${formData.tone}
-- Personalize messages using the contact's name and company when available${brandVoicePrompt}
+- Personalize using contact details when available${brandVoicePrompt}
 
-Format your response as JSON with these exact keys:
+IMPORTANT: Respond ONLY with valid JSON in this exact format:
 {
-  "initial_message": "message text here",
-  "follow_up_message": "message text here", 
-  "reminder_message": "message text here"
-}`
+  "initial_message": "Your first message here",
+  "follow_up_message": "Your follow-up message here",
+  "reminder_message": "Your reminder message here"
+}
 
-      console.log('Generating sequence with prompt:', prompt)
-      const response = await generateText(prompt, 'gpt-4o-mini')
+Do not include any other text, explanations, or formatting outside the JSON.`
+
+      console.log('Generating sequence with Ollama model:', selectedModel)
+      console.log('Prompt:', prompt)
+      const response = await generateText(prompt, selectedModel)
       console.log('Generated response:', response)
 
       try {
-        const parsedSequence = JSON.parse(response)
+        // Clean and extract JSON from the response
+        let cleanedResponse = response.trim()
+        
+        // Remove any markdown code blocks
+        cleanedResponse = cleanedResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '')
+        
+        // Try to find JSON in the response if it's wrapped in other text
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          cleanedResponse = jsonMatch[0]
+        }
+        
+        // If the JSON seems incomplete (missing closing brace), try to complete it
+        if (cleanedResponse.startsWith('{') && !cleanedResponse.endsWith('}')) {
+          // Count opening and closing braces to see if we need to add closing braces
+          const openBraces = (cleanedResponse.match(/\{/g) || []).length
+          const closeBraces = (cleanedResponse.match(/\}/g) || []).length
+          const missingBraces = openBraces - closeBraces
+          
+          if (missingBraces > 0) {
+            cleanedResponse += '}'.repeat(missingBraces)
+            console.log('Added missing closing braces:', missingBraces)
+          }
+        }
+        
+        // Additional cleaning for common issues
+        cleanedResponse = cleanedResponse.replace(/\n\s*\n/g, '\n') // Remove extra newlines
+        
+        // Don't normalize whitespace in JSON strings - this can break the JSON
+        // cleanedResponse = cleanedResponse.replace(/\s+/g, ' ') // This was breaking JSON strings
+        
+        console.log('Cleaned response for parsing:', cleanedResponse)
+        console.log('Response length:', cleanedResponse.length)
+        console.log('First 100 chars:', cleanedResponse.substring(0, 100))
+        console.log('Last 100 chars:', cleanedResponse.substring(Math.max(0, cleanedResponse.length - 100)))
+        
+        // Try to repair the JSON before parsing
+        const repairedJSON = repairJSON(cleanedResponse)
+        const parsedSequence = JSON.parse(repairedJSON)
+        
+        // Validate the parsed response
         if (parsedSequence.initial_message && parsedSequence.follow_up_message && parsedSequence.reminder_message) {
           setGeneratedSequence(parsedSequence)
         } else {
-          setError('Invalid response format from AI. Please try again.')
+          // If JSON parsing worked but structure is wrong, try to extract messages manually
+          console.log('Invalid JSON structure, attempting manual extraction...')
+          const manualSequence = extractMessagesFromText(response)
+          if (manualSequence) {
+            setGeneratedSequence(manualSequence)
+          } else {
+            setError('Invalid response format from AI. Please try again.')
+          }
         }
       } catch (parseError) {
         console.error('Error parsing AI response:', parseError)
-        setError('Failed to parse AI response. Please try again.')
+        console.log('Raw response:', response)
+        
+        // Try manual extraction as fallback
+        console.log('Attempting manual extraction...')
+        const manualSequence = extractMessagesFromText(response)
+        if (manualSequence) {
+          setGeneratedSequence(manualSequence)
+        } else {
+          // Try one more time with a more aggressive JSON extraction
+          console.log('Attempting aggressive JSON extraction...')
+          const aggressiveMatch = response.match(/\{[^{}]*"initial_message"[^{}]*"follow_up_message"[^{}]*"reminder_message"[^{}]*\}/)
+          if (aggressiveMatch) {
+            try {
+              const aggressiveJSON = repairJSON(aggressiveMatch[0])
+              const aggressiveSequence = JSON.parse(aggressiveJSON)
+              if (aggressiveSequence.initial_message && aggressiveSequence.follow_up_message && aggressiveSequence.reminder_message) {
+                setGeneratedSequence(aggressiveSequence)
+              } else {
+                setError(`Failed to parse AI response. The AI might not have generated a proper sequence format. Response preview: ${response.substring(0, 200)}...`)
+              }
+            } catch (aggressiveError) {
+              setError(`Failed to parse AI response. The AI might not have generated a proper sequence format. Response preview: ${response.substring(0, 200)}...`)
+            }
+          } else {
+            setError(`Failed to parse AI response. The AI might not have generated a proper sequence format. Response preview: ${response.substring(0, 200)}...`)
+          }
+        }
       }
     } catch (err) {
       console.error('Error generating sequence:', err)
@@ -227,11 +425,46 @@ Format your response as JSON with these exact keys:
             </button>
           )}
         </div>
+        
+        {/* Ollama Status Indicator */}
+        <div className="mt-4 flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${
+              ollamaStatus === 'connected' ? 'bg-green-500' : 
+              ollamaStatus === 'checking' ? 'bg-yellow-500' : 'bg-red-500'
+            }`}></div>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {ollamaStatus === 'connected' ? 'Ollama Connected' : 
+               ollamaStatus === 'checking' ? 'Checking Ollama...' : 'Ollama Disconnected'}
+            </span>
+          </div>
+          
+          {/* Model Selection */}
+          {ollamaStatus === 'connected' && availableModels.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <label htmlFor="modelSelect" className="text-sm text-gray-600 dark:text-gray-400">
+                Model:
+              </label>
+              <select
+                id="modelSelect"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                {availableModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={generateSequence} className="space-y-4">
         <div>
-          <label htmlFor="productDescription" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="productDescription" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Product/Service Description *
           </label>
           <textarea
