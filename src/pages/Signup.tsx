@@ -55,11 +55,14 @@ export default function Signup() {
                 src="/logo.svg" 
                 alt="GGL Logo" 
                 className="w-10 h-10"
-                onError={(e) => {
-                  // Fallback to a simple icon if logo doesn't load
-                  e.currentTarget.style.display = 'none'
-                  e.currentTarget.nextElementSibling.style.display = 'block'
-                }}
+                  onError={(e) => {
+                    // Fallback to a simple icon if logo doesn't load
+                    e.currentTarget.style.display = 'none'
+                    const nextElement = e.currentTarget.nextElementSibling as HTMLElement
+                    if (nextElement) {
+                      nextElement.style.display = 'block'
+                    }
+                  }}
               />
               <svg 
                 className="w-10 h-10 text-white hidden" 

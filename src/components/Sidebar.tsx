@@ -76,7 +76,7 @@ const navigation = [
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation()
-  const { theme, toggleTheme, isDark } = useTheme()
+  const { toggleTheme, isDark } = useTheme()
 
   return (
     <>

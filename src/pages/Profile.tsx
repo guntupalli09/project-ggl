@@ -21,7 +21,7 @@ export default function Profile() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [editing, setEditing] = useState(false)
-  const { theme, toggleTheme, isDark } = useTheme()
+  const { toggleTheme, isDark } = useTheme()
   const [formData, setFormData] = useState({
     name: '',
     company: ''
@@ -44,14 +44,19 @@ export default function Profile() {
         const isGuest = isGuestUser()
         
         if (isGuest) {
-          setUser({
+          const guestUser = {
             id: currentUser.id,
             email: currentUser.email || 'guest@example.com',
             name: 'Guest User',
             company: 'Demo Company',
-            plan_type: 'free',
+            plan_type: 'free' as const,
             created_at: new Date().toISOString(),
             is_guest: true
+          }
+          setUser(guestUser)
+          setFormData({
+            name: guestUser.name,
+            company: guestUser.company
           })
         } else {
           // Get user profile from Supabase
@@ -65,23 +70,23 @@ export default function Profile() {
             console.error('Error loading profile:', error)
           }
 
-          setUser({
+          const userProfile = {
             id: currentUser.id,
             email: currentUser.email || '',
             name: profile?.name || '',
             company: profile?.company || '',
-            plan_type: profile?.plan_type || 'free',
+            plan_type: (profile?.plan_type || 'free') as 'free' | 'premium',
             created_at: currentUser.created_at || new Date().toISOString(),
             is_guest: false
+          }
+          setUser(userProfile)
+          setFormData({
+            name: userProfile.name,
+            company: userProfile.company
           })
         }
 
         // Theme is now managed by useTheme hook
-
-        setFormData({
-          name: profile?.name || currentUser.user_metadata?.name || '',
-          company: profile?.company || ''
-        })
       } catch (err) {
         console.error('Error loading profile:', err)
         setError('Failed to load profile')

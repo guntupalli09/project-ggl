@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { generateText, checkOllamaStatus, getAvailableModels, DEFAULT_MODEL } from '../lib/ollamaClient'
+import { generateText, checkOllamaStatus, DEFAULT_MODEL } from '../lib/ollamaClient'
 import { supabase } from '../lib/supabaseClient'
 
 interface GrowthAction {
@@ -36,8 +36,7 @@ export default function DailyGrowthPlan({ onActionsGenerated }: DailyGrowthPlanP
   const [error, setError] = useState('')
   const [dataLoading, setDataLoading] = useState(true)
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
-  const [availableModels, setAvailableModels] = useState<string[]>([])
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+  const [selectedModel] = useState(DEFAULT_MODEL)
 
   // Check Ollama status and load available models
   useEffect(() => {
@@ -46,11 +45,6 @@ export default function DailyGrowthPlan({ onActionsGenerated }: DailyGrowthPlanP
         const isRunning = await checkOllamaStatus()
         if (isRunning) {
           setOllamaStatus('connected')
-          const models = await getAvailableModels()
-          setAvailableModels(models)
-          if (models.length > 0 && !models.includes(selectedModel)) {
-            setSelectedModel(models[0])
-          }
         } else {
           setOllamaStatus('disconnected')
         }
