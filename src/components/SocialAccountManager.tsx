@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getCurrentUser } from '../lib/authUtils'
-import { getOAuthUrl, refreshAccessToken, isTokenExpired, getPlatformDisplayName, getPlatformIcon } from '../lib/socialOAuth'
+import { getOAuthUrl, refreshAccessToken, isTokenExpired } from '../lib/socialOAuth'
 import { debugOAuth } from '../utils/debugOAuth'
 
 interface SocialAccount {
@@ -170,9 +170,9 @@ export default function SocialAccountManager() {
   }
 
   // Get connected account for platform
-  const getConnectedAccount = (platform: 'linkedin' | 'facebook' | 'instagram') => {
-    return accounts.find(account => account.platform === platform)
-  }
+  // const getConnectedAccount = (platform: 'linkedin' | 'facebook' | 'instagram') => {
+  //   return accounts.find(account => account.platform === platform)
+  // }
 
   if (loading) {
     return (

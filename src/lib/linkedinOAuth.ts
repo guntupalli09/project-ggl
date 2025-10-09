@@ -70,9 +70,9 @@ export const exchangeLinkedInCode = async (code: string, state: string): Promise
       expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
       profile: data.profile
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error exchanging LinkedIn code for token:', error)
-    throw new Error(`Failed to exchange code for token: ${error.message}`)
+    throw new Error(`Failed to exchange code for token: ${error?.message || error}`)
   }
 }
 
@@ -92,9 +92,9 @@ export const getLinkedInProfile = async (accessToken: string): Promise<LinkedInP
     }
     
     return data.profile
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting LinkedIn profile:', error)
-    throw new Error(`Failed to get LinkedIn profile: ${error.message}`)
+    throw new Error(`Failed to get LinkedIn profile: ${error?.message || error}`)
   }
 }
 

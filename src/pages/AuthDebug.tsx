@@ -23,7 +23,7 @@ export default function AuthDebug() {
           isGuest: guestStatus,
           session: await supabase.auth.getSession()
         })
-      } catch (error) {
+      } catch (error: any) {
         console.error('Auth check error:', error)
         setAuthState({ error: error.message })
       } finally {

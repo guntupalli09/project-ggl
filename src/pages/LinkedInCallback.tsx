@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { exchangeLinkedInCode, getLinkedInProfile } from '../lib/linkedinOAuth'
+import { exchangeLinkedInCode } from '../lib/linkedinOAuth'
 
 export default function LinkedInCallback() {
   const [searchParams] = useSearchParams()

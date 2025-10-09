@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import { getCurrentUser } from '../lib/authUtils'
+// import { supabase } from '../lib/supabaseClient'
+// import { getCurrentUser } from '../lib/authUtils'
 import SocialAccountManager from '../components/SocialAccountManager'
 import AISocialPostGenerator from '../components/AISocialPostGenerator'
 import LinkedInConnector from '../components/LinkedInConnector'
@@ -64,14 +64,14 @@ const PostHistory = () => (
 export default function SocialAutomation() {
   const [activeTab, setActiveTab] = useState('accounts')
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  // const [user] = useState<any>(null)
 
   // Load user data
   useState(() => {
     const loadUser = async () => {
       try {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
+        // const currentUser = await getCurrentUser()
+        // setUser(currentUser)
       } catch (error) {
         console.error('Error loading user:', error)
       } finally {

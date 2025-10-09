@@ -4,7 +4,7 @@ import { getLinkedInSession, isLinkedInConnected } from '../lib/linkedinOAuth'
 
 export default function LinkedInMain() {
   const [activeTab, setActiveTab] = useState<'connect' | 'profile' | 'posts'>('connect')
-  const [session, setSession] = useState(getLinkedInSession())
+  const [session] = useState(getLinkedInSession())
 
   const isConnected = isLinkedInConnected() && session
 
