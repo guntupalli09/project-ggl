@@ -1,4 +1,5 @@
 // Utility functions for authentication and guest mode
+import { supabase } from './supabaseClient'
 
 export const isGuestUser = (): boolean => {
   if (typeof window === 'undefined') return false
@@ -33,6 +34,3 @@ export const getCurrentUser = async () => {
   
   return null
 }
-
-// Import supabase client
-import { supabase } from './supabaseClient'

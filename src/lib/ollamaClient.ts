@@ -129,16 +129,16 @@ export const isModelAvailable = async (model: string): Promise<boolean> => {
 // Recommended models for different use cases
 export const RECOMMENDED_MODELS = {
   // Lightweight models (faster, less resource intensive)
-  LIGHTWEIGHT: 'llama3.2:3b',
-  LIGHTWEIGHT_ALT: 'phi3:mini',
+  LIGHTWEIGHT: 'llama3:latest',
+  LIGHTWEIGHT_ALT: 'llama2:latest',
   
   // Medium models (balanced performance)
-  MEDIUM: 'llama3.2:7b',
-  MEDIUM_ALT: 'mistral:7b',
+  MEDIUM: 'llama3:latest',
+  MEDIUM_ALT: 'llama2:latest',
   
   // Heavy models (best quality, more resource intensive)
-  HEAVY: 'llama3.1:8b',
-  HEAVY_ALT: 'codellama:7b',
+  HEAVY: 'llama3:latest',
+  HEAVY_ALT: 'llama2:latest',
 }
 
 // Default model configuration
