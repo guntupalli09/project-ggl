@@ -111,6 +111,7 @@ interface Lead {
   email: string
   notes: string
   status: string
+  created_at: string
   last_outbound_message?: string
   last_inbound_message?: string
 }
@@ -248,7 +249,8 @@ async function findLeadsForFollowUp(automation: Automation): Promise<Lead[]> {
       email,
       notes,
       status,
-      created_at
+      created_at,
+      last_outbound_message
     `)
     .eq('user_id', automation.user_id)
     .in('status', ['new', 'contacted'])
