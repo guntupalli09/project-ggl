@@ -43,6 +43,19 @@ const PublicLeadCapture: React.FC = () => {
       }
 
       try {
+        // Handle demo case
+        if (businessSlug === 'demo') {
+          setBusinessInfo({
+            user_id: 'demo-user',
+            business_name: 'Demo Business',
+            logo_url: '',
+            booking_link: '',
+            niche: 'Demo'
+          })
+          setLoading(false)
+          return
+        }
+
         const { data, error } = await supabase
           .from('user_settings')
           .select('user_id, business_name, logo_url, booking_link, niche')

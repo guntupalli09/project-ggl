@@ -23,7 +23,7 @@ const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadSuccess, setDownloadSuccess] = useState(false)
   
-  const leadCaptureUrl = `${window.location.origin}/leads/${businessSlug}`
+  const leadCaptureUrl = `${window.location.origin}/leads/${businessSlug || 'demo'}`
 
   const handleDownload = async () => {
     if (!qrRef.current) return

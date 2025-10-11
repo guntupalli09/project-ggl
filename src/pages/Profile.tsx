@@ -121,11 +121,25 @@ export default function Profile() {
             is_guest: false
           }
           setUser(userProfile)
+          // Generate a business slug if none exists
+          let businessSlug = settings?.business_slug
+          if (!businessSlug) {
+            // Generate slug from company name or email
+            const companyName = userProfile.company || userProfile.email?.split('@')[0] || 'business'
+            businessSlug = companyName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+            
+            // Save the generated slug
+            await supabase
+              .from('user_settings')
+              .update({ business_slug: businessSlug })
+              .eq('user_id', currentUser.id)
+          }
+          
           setFormData({
             name: userProfile.name,
             company: userProfile.company,
             booking_link: settings?.booking_link || '',
-            business_slug: settings?.business_slug || '',
+            business_slug: businessSlug,
             twilio_phone_number: settings?.twilio_phone_number || '',
             business_phone: settings?.business_phone || '',
             missed_call_automation_enabled: settings?.missed_call_automation_enabled || false
