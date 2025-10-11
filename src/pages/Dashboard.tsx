@@ -1,26 +1,31 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { isGuestUser, getCurrentUser } from '../lib/authUtils'
+import { clearLinkedInSession } from '../lib/linkedinOAuth'
+import { useDashboardAnalytics } from '../hooks/useDashboardAnalytics'
+import LeadsBySourceChart from '../components/LeadsBySourceChart'
+import ResponseTimeMetric from '../components/ResponseTimeMetric'
+import TopChannelsMetric from '../components/TopChannelsMetric'
+import {
+  UserPlusIcon,
+  PhoneIcon,
+  CalendarIcon,
+  CurrencyDollarIcon,
+  ArrowTrendingUpIcon,
+  ChartBarIcon
+} from '@heroicons/react/24/outline'
 
 interface DashboardStats {
-  totalLeads: number
-  totalContacts: number
-  totalSequences: number
-  totalMessages: number
-  weeklyRevenue: number
+  newLeadsThisWeek: number
+  contactedLeads: number
+  bookedLeads: number
+  totalRevenue: number
   conversionRate: number
-  recentMessages: Array<{
-    id: string
-    lead_name: string
-    lead_company: string
-    message: string
-    created_at: string
-  }>
-  weeklyMessages: Array<{
+  weeklyBookings: Array<{
     week: string
-    messages: number
+    bookings: number
   }>
 }
 
@@ -29,154 +34,29 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [isGuest, setIsGuest] = useState(false)
   const [stats, setStats] = useState<DashboardStats>({
-    totalLeads: 0,
-    totalContacts: 0,
-    totalSequences: 0,
-    totalMessages: 0,
-    weeklyRevenue: 0,
+    newLeadsThisWeek: 0,
+    contactedLeads: 0,
+    bookedLeads: 0,
+    totalRevenue: 0,
     conversionRate: 0,
-    recentMessages: [],
-    weeklyMessages: []
+    weeklyBookings: []
   })
   const [statsLoading, setStatsLoading] = useState(true)
-  const [roiInput, setRoiInput] = useState('')
-  const [roiSubmitting, setRoiSubmitting] = useState(false)
-  const [roiError, setRoiError] = useState('')
+  const [revenueInput, setRevenueInput] = useState('')
+  const [revenueSubmitting, setRevenueSubmitting] = useState(false)
+  const [revenueError, setRevenueError] = useState('')
   const navigate = useNavigate()
-
-  // Fetch dashboard statistics
-  const fetchDashboardStats = async () => {
-    try {
-      setStatsLoading(true)
-      
-      // Fetch total leads count
-      const { count: leadsCount, error: leadsError } = await supabase
-        .from('leads')
-        .select('*', { count: 'exact', head: true })
-
-      if (leadsError) {
-        console.error('Error fetching leads count:', leadsError)
-      }
-
-      // Fetch total contacts count
-      const { count: contactsCount, error: contactsError } = await supabase
-        .from('crm_contacts')
-        .select('*', { count: 'exact', head: true })
-
-      if (contactsError) {
-        console.error('Error fetching contacts count:', contactsError)
-      }
-
-      // Fetch total sequences count
-      const { count: sequencesCount, error: sequencesError } = await supabase
-        .from('outreach_sequences')
-        .select('*', { count: 'exact', head: true })
-
-      if (sequencesError) {
-        console.error('Error fetching sequences count:', sequencesError)
-      }
-
-      // Fetch recent messages from sequences
-      const { data: recentMessages, error: messagesError } = await supabase
-        .from('outreach_sequences')
-        .select(`
-          id,
-          initial_message,
-          follow_up_message,
-          reminder_message,
-          created_at,
-          crm_contacts!inner(name, company)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (messagesError) {
-        console.error('Error fetching recent messages:', messagesError)
-      }
-
-      // Fetch weekly message data for chart
-      const { data: weeklyData, error: weeklyError } = await supabase
-        .from('outreach_sequences')
-        .select('created_at')
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: true })
-
-      if (weeklyError) {
-        console.error('Error fetching weekly data:', weeklyError)
-      }
-
-      // Fetch weekly revenue
-      const weekStart = getWeekStartDate()
-      const { data: roiData, error: roiError } = await supabase
-        .from('roi_metrics')
-        .select('revenue')
-        .eq('week_start_date', weekStart)
-        .single()
-
-      if (roiError && roiError.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error fetching ROI data:', roiError)
-      }
-
-      // Process weekly data
-      const weeklyMessages = processWeeklyData(weeklyData || [])
-
-      // Process recent messages
-      const processedRecentMessages = (recentMessages || []).map(seq => ({
-        id: seq.id,
-        lead_name: (seq as any).crm_contacts?.name || 'Unknown',
-        lead_company: (seq as any).crm_contacts?.company || 'Unknown',
-        message: seq.initial_message,
-        created_at: seq.created_at
-      }))
-
-      // Calculate conversion rate
-      const weeklyRevenue = roiData?.revenue || 0
-      const conversionRate = leadsCount && leadsCount > 0 ? (weeklyRevenue / leadsCount) * 100 : 0
-
-      setStats({
-        totalLeads: leadsCount || 0,
-        totalContacts: contactsCount || 0,
-        totalSequences: sequencesCount || 0,
-        totalMessages: (sequencesCount || 0) * 3, // Each sequence has 3 messages
-        weeklyRevenue: weeklyRevenue,
-        conversionRate: conversionRate,
-        recentMessages: processedRecentMessages,
-        weeklyMessages: weeklyMessages
-      })
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
-    } finally {
-      setStatsLoading(false)
-    }
-  }
-
-  // Process weekly data for chart
-  const processWeeklyData = (data: any[]) => {
-    const weekMap = new Map()
-    const today = new Date()
-    
-    // Initialize last 7 days
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today)
-      date.setDate(date.getDate() - i)
-      const weekKey = date.toISOString().split('T')[0]
-      weekMap.set(weekKey, 0)
-    }
-
-    // Count messages per day
-    data.forEach(item => {
-      const date = new Date(item.created_at).toISOString().split('T')[0]
-      if (weekMap.has(date)) {
-        weekMap.set(date, weekMap.get(date) + 3) // Each sequence = 3 messages
-      }
-    })
-
-    // Convert to array format for chart
-    return Array.from(weekMap.entries()).map(([date, count]) => ({
-      week: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
-      messages: count
-    }))
-  }
+  
+  // Analytics hook
+  const {
+    leadsBySource,
+    averageResponseTime,
+    previousAverageResponseTime,
+    topChannels,
+    isLoading: analyticsLoading,
+    error: analyticsError,
+    refetch: refetchAnalytics
+  } = useDashboardAnalytics()
 
   // Get the start of the current week (Monday)
   const getWeekStartDate = () => {
@@ -187,24 +67,149 @@ export default function Dashboard() {
     return monday.toISOString().split('T')[0]
   }
 
-  // Handle ROI submission
-  const handleRoiSubmit = async (e: React.FormEvent) => {
+  // Get the start of 8 weeks ago
+  const getEightWeeksAgo = () => {
+    const today = new Date()
+    const eightWeeksAgo = new Date(today.getTime() - (8 * 7 * 24 * 60 * 60 * 1000))
+    return eightWeeksAgo.toISOString().split('T')[0]
+  }
+
+  // Fetch dashboard statistics
+  const fetchDashboardStats = async () => {
+    try {
+      setStatsLoading(true)
+      
+      const weekStart = getWeekStartDate()
+      const eightWeeksAgo = getEightWeeksAgo()
+
+      // Fetch new leads this week
+      const { count: newLeadsThisWeek, error: newLeadsError } = await supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', weekStart)
+
+      if (newLeadsError) {
+        console.error('Error fetching new leads count:', newLeadsError)
+      }
+
+      // Fetch contacted leads (status = 'contacted')
+      const { count: contactedLeads, error: contactedError } = await supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'contacted')
+
+      if (contactedError) {
+        console.error('Error fetching contacted leads count:', contactedError)
+      }
+
+      // Fetch booked leads (status = 'booked')
+      const { count: bookedLeads, error: bookedError } = await supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'booked')
+
+      if (bookedError) {
+        console.error('Error fetching booked leads count:', bookedError)
+      }
+
+      // Fetch total revenue from ROI metrics
+      const { data: roiData, error: roiError } = await supabase
+        .from('roi_metrics')
+        .select('revenue')
+        .order('week_start_date', { ascending: false })
+
+      if (roiError && roiError.code !== 'PGRST116') {
+        console.error('Error fetching ROI data:', roiError)
+      }
+
+      // Calculate total revenue
+      const totalRevenue = roiData?.reduce((sum, record) => sum + (record.revenue || 0), 0) || 0
+
+      // Fetch weekly bookings data for the last 8 weeks
+      const { data: weeklyBookingsData, error: weeklyBookingsError } = await supabase
+        .from('leads')
+        .select('created_at, status')
+        .eq('status', 'booked')
+        .gte('created_at', eightWeeksAgo)
+        .order('created_at', { ascending: true })
+
+      if (weeklyBookingsError) {
+        console.error('Error fetching weekly bookings data:', weeklyBookingsError)
+      }
+
+      // Process weekly bookings data
+      const weeklyBookings = processWeeklyBookingsData(weeklyBookingsData || [])
+
+      // Calculate conversion rate (booked leads / total leads)
+      const totalLeads = (newLeadsThisWeek || 0) + (contactedLeads || 0) + (bookedLeads || 0)
+      const conversionRate = totalLeads > 0 ? ((bookedLeads || 0) / totalLeads) * 100 : 0
+
+      setStats({
+        newLeadsThisWeek: newLeadsThisWeek || 0,
+        contactedLeads: contactedLeads || 0,
+        bookedLeads: bookedLeads || 0,
+        totalRevenue: totalRevenue,
+        conversionRate: conversionRate,
+        weeklyBookings: weeklyBookings
+      })
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+    } finally {
+      setStatsLoading(false)
+    }
+  }
+
+  // Process weekly bookings data for chart
+  const processWeeklyBookingsData = (data: any[]) => {
+    const weekMap = new Map()
+    const today = new Date()
+    
+    // Initialize last 8 weeks
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(today)
+      weekStart.setDate(weekStart.getDate() - (i * 7))
+      const weekKey = weekStart.toISOString().split('T')[0]
+      const weekLabel = `Week ${8 - i}`
+      weekMap.set(weekKey, { week: weekLabel, bookings: 0 })
+    }
+
+    // Count bookings per week
+    data.forEach(item => {
+      const date = new Date(item.created_at)
+      const weekStart = new Date(date)
+      const day = weekStart.getDay()
+      const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1)
+      const monday = new Date(weekStart.setDate(diff))
+      const weekKey = monday.toISOString().split('T')[0]
+      
+      if (weekMap.has(weekKey)) {
+        const current = weekMap.get(weekKey)
+        weekMap.set(weekKey, { ...current, bookings: current.bookings + 1 })
+      }
+    })
+
+    // Convert to array format for chart
+    return Array.from(weekMap.values())
+  }
+
+  // Handle revenue submission
+  const handleRevenueSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setRoiError('')
-    setRoiSubmitting(true)
+    setRevenueError('')
+    setRevenueSubmitting(true)
 
     try {
-      const revenue = parseFloat(roiInput)
+      const revenue = parseFloat(revenueInput)
       if (isNaN(revenue) || revenue < 0) {
-        setRoiError('Please enter a valid positive number')
-        setRoiSubmitting(false)
+        setRevenueError('Please enter a valid positive number')
+        setRevenueSubmitting(false)
         return
       }
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setRoiError('User not authenticated')
-        setRoiSubmitting(false)
+        setRevenueError('User not authenticated')
+        setRevenueSubmitting(false)
         return
       }
 
@@ -222,18 +227,18 @@ export default function Dashboard() {
         })
 
       if (error) {
-        console.error('Error saving ROI data:', error)
-        setRoiError('Failed to save revenue data')
+        console.error('Error saving revenue data:', error)
+        setRevenueError('Failed to save revenue data')
       } else {
-        setRoiInput('')
+        setRevenueInput('')
         // Refresh dashboard stats to show updated revenue
         await fetchDashboardStats()
       }
     } catch (err) {
       console.error('Error:', err)
-      setRoiError('Failed to save revenue data')
+      setRevenueError('Failed to save revenue data')
     } finally {
-      setRoiSubmitting(false)
+      setRevenueSubmitting(false)
     }
   }
 
@@ -277,15 +282,19 @@ export default function Dashboard() {
   }, [navigate])
 
   const handleSignOut = async () => {
+    console.log('🚪 Dashboard handleSignOut called')
+    // Clear LinkedIn session
+    clearLinkedInSession()
+    console.log('🚪 Signing out from Supabase from Dashboard')
     await supabase.auth.signOut()
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     )
@@ -320,7 +329,7 @@ export default function Dashboard() {
         
         {/* Guest Mode Warning Banner */}
         {isGuest && (
-          <div className="mb-8 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-6">
+          <div className="mb-8 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
             <div className="flex items-start">
               <div className="flex-shrink-0">
                 <svg className="h-8 w-8 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
@@ -328,10 +337,10 @@ export default function Dashboard() {
                 </svg>
               </div>
               <div className="ml-4 flex-1">
-                <h3 className="text-lg font-medium text-yellow-800 mb-2">
+                <h3 className="text-lg font-medium text-yellow-800 dark:text-yellow-200 mb-2">
                   🎯 You are exploring in guest mode
                 </h3>
-                <p className="text-yellow-700 mb-4">
+                <p className="text-yellow-700 dark:text-yellow-300 mb-4">
                   Your data won't be saved permanently. This is a demo version where you can explore all features without creating an account.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -346,7 +355,7 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={() => navigate('/signup')}
-                    className="inline-flex items-center px-4 py-2 border border-yellow-300 text-sm font-medium rounded-md text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                    className="inline-flex items-center px-4 py-2 border border-yellow-300 dark:border-yellow-600 text-sm font-medium rounded-md text-yellow-800 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-900/20 hover:bg-yellow-200 dark:hover:bg-yellow-900/40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -359,163 +368,107 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
-          {/* Total Leads Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
+        {/* Key Metrics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* New Leads This Week Card */}
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-shadow duration-300">
+            <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
+                  <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <UserPlusIcon className="w-6 h-6 text-white" />
                   </div>
                 </div>
-                <div className="ml-5 w-0 flex-1">
+                <div className="ml-4 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Total Leads</dt>
-                    <dd className="text-lg font-medium text-gray-900">
+                    <dt className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate">New Leads This Week</dt>
+                    <dd className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                       {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+                        <div className="animate-pulse bg-blue-200 dark:bg-blue-800 h-8 w-16 rounded"></div>
                       ) : (
-                        stats.totalLeads
+                        stats.newLeadsThisWeek
                       )}
                     </dd>
+                    <dd className="text-xs text-blue-500 dark:text-blue-300 mt-1">Fresh prospects</dd>
                   </dl>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Total Contacts Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
+          {/* Contacted Leads Card */}
+          <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-shadow duration-300">
+            <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
+                  <div className="w-12 h-12 bg-yellow-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <PhoneIcon className="w-6 h-6 text-white" />
                   </div>
                 </div>
-                <div className="ml-5 w-0 flex-1">
+                <div className="ml-4 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">CRM Contacts</dt>
-                    <dd className="text-lg font-medium text-gray-900">
+                    <dt className="text-sm font-medium text-yellow-600 dark:text-yellow-400 truncate">Contacted Leads</dt>
+                    <dd className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
                       {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+                        <div className="animate-pulse bg-yellow-200 dark:bg-yellow-800 h-8 w-16 rounded"></div>
                       ) : (
-                        stats.totalContacts
+                        stats.contactedLeads
                       )}
                     </dd>
+                    <dd className="text-xs text-yellow-500 dark:text-yellow-300 mt-1">In conversation</dd>
                   </dl>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Total Sequences Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
+          {/* Booked Leads Card */}
+          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-shadow duration-300">
+            <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <CalendarIcon className="w-6 h-6 text-white" />
                   </div>
                 </div>
-                <div className="ml-5 w-0 flex-1">
+                <div className="ml-4 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Outreach Sequences</dt>
-                    <dd className="text-lg font-medium text-gray-900">
+                    <dt className="text-sm font-medium text-green-600 dark:text-green-400 truncate">Booked Leads</dt>
+                    <dd className="text-2xl font-bold text-green-900 dark:text-green-100">
                       {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+                        <div className="animate-pulse bg-green-200 dark:bg-green-800 h-8 w-16 rounded"></div>
                       ) : (
-                        stats.totalSequences
+                        stats.bookedLeads
                       )}
                     </dd>
+                    <dd className="text-xs text-green-500 dark:text-green-300 mt-1">Ready to close</dd>
                   </dl>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Total Messages Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
+          {/* Total Revenue Card */}
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-shadow duration-300">
+            <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-orange-500 rounded-md flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
+                  <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <CurrencyDollarIcon className="w-6 h-6 text-white" />
                   </div>
                 </div>
-                <div className="ml-5 w-0 flex-1">
+                <div className="ml-4 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Total Messages</dt>
-                    <dd className="text-lg font-medium text-gray-900">
+                    <dt className="text-sm font-medium text-emerald-600 dark:text-emerald-400 truncate">Total Revenue</dt>
+                    <dd className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
                       {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+                        <div className="animate-pulse bg-emerald-200 dark:bg-emerald-800 h-8 w-20 rounded"></div>
                       ) : (
-                        stats.totalMessages
+                        `$${stats.totalRevenue.toLocaleString()}`
                       )}
                     </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Weekly Revenue Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-emerald-500 rounded-md flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Weekly Revenue</dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
-                      ) : (
-                        `$${stats.weeklyRevenue.toFixed(2)}`
-                      )}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Conversion Rate Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-cyan-500 rounded-md flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Conversion Rate</dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {statsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
-                      ) : (
-                        `${stats.conversionRate.toFixed(1)}%`
-                      )}
+                    <dd className="text-xs text-emerald-500 dark:text-emerald-300 mt-1">
+                      {stats.conversionRate.toFixed(1)}% conversion rate
                     </dd>
                   </dl>
                 </div>
@@ -524,192 +477,99 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Weekly Messages Chart */}
-        <div className="bg-white shadow rounded-lg mb-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Weekly Message Generation</h3>
-            <p className="text-sm text-gray-500">Messages generated over the last 7 days</p>
+        {/* Bookings Chart */}
+        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl mb-8 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+            <div className="flex items-center">
+              <ChartBarIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-3" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Bookings per Week</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Last 8 weeks performance</p>
+              </div>
+            </div>
           </div>
           <div className="p-6">
             {statsLoading ? (
-              <div className="h-64 flex items-center justify-center">
-                <div className="animate-pulse bg-gray-200 h-64 w-full rounded"></div>
+              <div className="h-80 flex items-center justify-center">
+                <div className="animate-pulse bg-gray-200 dark:bg-gray-700 h-80 w-full rounded-lg"></div>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={stats.weeklyMessages}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="week" />
-                  <YAxis />
-                  <Tooltip 
-                    formatter={(value: any) => [value, 'Messages']}
-                    labelFormatter={(label) => `Day: ${label}`}
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={stats.weeklyBookings} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis 
+                    dataKey="week" 
+                    stroke="#6b7280"
+                    fontSize={12}
                   />
-                  <Bar dataKey="messages" fill="#3B82F6" />
-                </BarChart>
+                  <YAxis 
+                    stroke="#6b7280"
+                    fontSize={12}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: '#1f2937',
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#f9fafb'
+                    }}
+                    formatter={(value: any) => [value, 'Bookings']}
+                    labelFormatter={(label) => `Week: ${label}`}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="bookings" 
+                    stroke="#10b981" 
+                    strokeWidth={3}
+                    dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
+                    activeDot={{ r: 8, stroke: '#10b981', strokeWidth: 2 }}
+                  />
+                </LineChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-          {/* Recent AI Messages Section */}
-          {stats.recentMessages.length > 0 && (
-            <div className="bg-white shadow rounded-lg mb-8">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Recent AI Messages</h3>
-                <p className="text-sm text-gray-500">Latest generated messages for your leads</p>
-              </div>
-              <div className="divide-y divide-gray-200">
-                {stats.recentMessages.map((message) => (
-                  <div key={message.id} className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3">
-                          <h4 className="text-sm font-medium text-gray-900">
-                            {message.lead_name}
-                          </h4>
-                          <span className="text-sm text-gray-500">at</span>
-                          <span className="text-sm text-gray-700">{message.lead_company}</span>
-                        </div>
-                        <p className="mt-2 text-sm text-gray-600 line-clamp-2">
-                          {message.message}
-                        </p>
-                        <p className="mt-2 text-xs text-gray-400">
-                          {new Date(message.created_at).toLocaleDateString()} at{' '}
-                          {new Date(message.created_at).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        {/* Revenue Input Section */}
+        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
+            <div className="flex items-center">
+              <ArrowTrendingUpIcon className="h-6 w-6 text-purple-600 dark:text-purple-400 mr-3" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue Tracking</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Track your weekly revenue and conversion metrics</p>
               </div>
             </div>
-          )}
-
-          {/* Navigation Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-indigo-500 rounded-md flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Leads Management</dt>
-                      <dd className="text-lg font-medium text-gray-900">Manage your leads</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-5 py-3">
-                <div className="text-sm">
-                  <Link
-                    to="/leads"
-                    className="font-medium text-indigo-600 hover:text-indigo-500"
-                  >
-                    View leads
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Analytics</dt>
-                      <dd className="text-lg font-medium text-gray-900">Coming soon</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-5 py-3">
-                <div className="text-sm">
-                  <span className="font-medium text-gray-500">Not available yet</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">CRM Contacts</dt>
-                      <dd className="text-lg font-medium text-gray-900">Manage relationships</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-5 py-3">
-                <div className="text-sm">
-                  <Link
-                    to="/crm"
-                    className="font-medium text-indigo-600 hover:text-indigo-500"
-                  >
-                    View contacts
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ROI Input Section */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Revenue Tracking</h3>
-            <p className="text-sm text-gray-500">Enter your weekly revenue to track ROI and conversion rates</p>
           </div>
           <div className="p-6">
-            <form onSubmit={handleRoiSubmit} className="flex items-end space-x-4">
+            <form onSubmit={handleRevenueSubmit} className="flex items-end space-x-4">
               <div className="flex-1">
-                <label htmlFor="revenue" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="revenue" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Revenue earned this week
                 </label>
-                <div className="relative rounded-md shadow-sm">
+                <div className="relative rounded-lg shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                    <span className="text-gray-500 dark:text-gray-400 sm:text-sm">$</span>
                   </div>
                   <input
                     type="number"
                     id="revenue"
                     step="0.01"
                     min="0"
-                    className="block w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="block w-full pl-7 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
                     placeholder="0.00"
-                    value={roiInput}
-                    onChange={(e) => setRoiInput(e.target.value)}
+                    value={revenueInput}
+                    onChange={(e) => setRevenueInput(e.target.value)}
                     required
                   />
                 </div>
               </div>
               <button
                 type="submit"
-                disabled={roiSubmitting}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                disabled={revenueSubmitting}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-8 py-3 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-lg hover:shadow-xl transition-all duration-200"
               >
-                {roiSubmitting ? (
+                {revenueSubmitting ? (
                   <>
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -722,32 +582,153 @@ export default function Dashboard() {
                 )}
               </button>
             </form>
-            {roiError && (
-              <div className="mt-4 text-red-600 text-sm">
-                {roiError}
+            {revenueError && (
+              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-red-600 dark:text-red-400 text-sm">{revenueError}</p>
               </div>
             )}
-            {stats.weeklyRevenue > 0 && (
-              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+            {stats.totalRevenue > 0 && (
+              <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="h-6 w-6 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">
-                      Revenue saved successfully!
+                    <h3 className="text-sm font-semibold text-green-800 dark:text-green-200">
+                      Revenue tracking active! 🎉
                     </h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <p>Weekly Revenue: ${stats.weeklyRevenue.toFixed(2)}</p>
-                      <p>Conversion Rate: {stats.conversionRate.toFixed(1)}% (${stats.weeklyRevenue.toFixed(2)} ÷ {stats.totalLeads} leads)</p>
+                    <div className="mt-2 text-sm text-green-700 dark:text-green-300">
+                      <p><strong>Total Revenue:</strong> ${stats.totalRevenue.toLocaleString()}</p>
+                      <p><strong>Conversion Rate:</strong> {stats.conversionRate.toFixed(1)}% ({stats.bookedLeads} bookings ÷ {stats.newLeadsThisWeek + stats.contactedLeads + stats.bookedLeads} total leads)</p>
                     </div>
                   </div>
                 </div>
               </div>
             )}
           </div>
+        </div>
+
+        {/* Analytics Section */}
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Leads by Source Chart */}
+          <div className="lg:col-span-2">
+            <LeadsBySourceChart data={leadsBySource} />
+          </div>
+          
+          {/* Response Time Metric */}
+          <div>
+            <ResponseTimeMetric 
+              averageMinutes={averageResponseTime}
+              previousAverage={previousAverageResponseTime}
+              isLoading={analyticsLoading}
+            />
+          </div>
+        </div>
+
+        {/* Top Channels Section */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TopChannelsMetric 
+            channels={topChannels}
+            isLoading={analyticsLoading}
+          />
+          
+          {/* Analytics Error Display */}
+          {analyticsError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Analytics Error
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                    <p>{analyticsError}</p>
+                    <button
+                      onClick={refetchAnalytics}
+                      className="mt-2 text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Link
+            to="/leads"
+            className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-all duration-200 group"
+          >
+            <div className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+                    <UserPlusIcon className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="ml-4 flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    Manage Leads
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">View and manage your lead pipeline</p>
+                </div>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            to="/crm"
+            className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-all duration-200 group"
+          >
+            <div className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+                    <PhoneIcon className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="ml-4 flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    CRM Contacts
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Manage customer relationships</p>
+                </div>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            to="/social-automation"
+            className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-all duration-200 group"
+          >
+            <div className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-10 0a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2M9 12h6m-6 4h6" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-4 flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
+                    Social Automation
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Automate social media posts</p>
+                </div>
+              </div>
+            </div>
+          </Link>
+        </div>
         </div>
       </main>
     </div>

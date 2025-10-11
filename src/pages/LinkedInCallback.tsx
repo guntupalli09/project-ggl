@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { exchangeLinkedInCode } from '../lib/linkedinOAuth'
+import { exchangeLinkedInCode, storeLinkedInSession } from '../lib/linkedinOAuth'
 
 export default function LinkedInCallback() {
   const [searchParams] = useSearchParams()
@@ -29,8 +29,16 @@ export default function LinkedInCallback() {
         localStorage.setItem('linkedin_access_token', result.access_token)
         localStorage.setItem('linkedin_expires_at', result.expires_at || '')
 
-        // Use profile from the exchange result
+        // Store the complete session with profile information
         const userProfile = result.profile
+        storeLinkedInSession(
+          {
+            access_token: result.access_token,
+            expires_in: result.expires_in,
+            expires_at: result.expires_at
+          },
+          userProfile
+        )
 
         setStatus('success')
         setMessage(`Successfully connected to LinkedIn as ${userProfile.firstName} ${userProfile.lastName}! Redirecting...`)
@@ -43,7 +51,13 @@ export default function LinkedInCallback() {
       } catch (error: any) {
         console.error('LinkedIn callback error:', error)
         setStatus('error')
-        setMessage(error.message || 'Failed to connect to LinkedIn')
+        
+        // Check if it's a state parameter error
+        if (error.message && error.message.includes('Invalid state parameter')) {
+          setMessage('Connection expired. Please try connecting to LinkedIn again.')
+        } else {
+          setMessage(error.message || 'Failed to connect to LinkedIn')
+        }
         
         // Redirect to dashboard after 3 seconds
         setTimeout(() => {

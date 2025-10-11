@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { supabase } from '../lib/supabaseClient'
 import { isGuestUser, clearGuestSession } from '../lib/authUtils'
+import { clearLinkedInSession } from '../lib/linkedinOAuth'
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -14,11 +15,18 @@ export default function Layout() {
   }, [])
 
   const handleSignOut = async () => {
+    console.log('🚪 Layout handleSignOut called')
+    // Clear LinkedIn session
+    clearLinkedInSession()
+    
     if (isGuest) {
+      console.log('🚪 Clearing guest session')
       clearGuestSession()
     } else {
+      console.log('🚪 Signing out from Supabase')
       await supabase.auth.signOut()
     }
+    console.log('🚪 Navigating to login')
     navigate('/login')
   }
 

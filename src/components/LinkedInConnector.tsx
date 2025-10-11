@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getLinkedInAuthUrl, getLinkedInProfile, isLinkedInTokenExpired } from '../lib/linkedinOAuth'
+import { getLinkedInAuthUrl, isLinkedInTokenExpired, getLinkedInSession, isLinkedInConnected, clearLinkedInSession } from '../lib/linkedinOAuth'
 
 export default function LinkedInConnector() {
   const [connecting, setConnecting] = useState(false)
@@ -7,21 +7,22 @@ export default function LinkedInConnector() {
   const [session, setSession] = useState<any>(null)
 
   useEffect(() => {
-    // Load existing session
-    const accessToken = localStorage.getItem('linkedin_access_token')
-    const expiresAt = localStorage.getItem('linkedin_expires_at')
-    
-    if (accessToken && expiresAt && !isLinkedInTokenExpired(expiresAt)) {
-      // Fetch profile to verify token is still valid
-      getLinkedInProfile(accessToken)
-        .then(profile => {
-          setSession({ accessToken, expiresAt, profile })
-        })
-        .catch(() => {
-          // Token is invalid, clear it
-          localStorage.removeItem('linkedin_access_token')
-          localStorage.removeItem('linkedin_expires_at')
-        })
+    // Load existing session using centralized functions
+    if (isLinkedInConnected()) {
+      const linkedinSession = getLinkedInSession()
+      if (linkedinSession && linkedinSession.tokens && linkedinSession.profile) {
+        const { tokens, profile } = linkedinSession
+        if (tokens.expires_at && !isLinkedInTokenExpired(tokens.expires_at)) {
+          setSession({ 
+            accessToken: tokens.access_token, 
+            expiresAt: tokens.expires_at, 
+            profile 
+          })
+        } else {
+          // Token is expired, clear it
+          clearLinkedInSession()
+        }
+      }
     }
   }, [])
 
@@ -41,8 +42,7 @@ export default function LinkedInConnector() {
   }
 
   const handleDisconnect = () => {
-    localStorage.removeItem('linkedin_access_token')
-    localStorage.removeItem('linkedin_expires_at')
+    clearLinkedInSession()
     setSession(null)
   }
 

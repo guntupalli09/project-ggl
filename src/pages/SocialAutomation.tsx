@@ -1,20 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 // import { supabase } from '../lib/supabaseClient'
 // import { getCurrentUser } from '../lib/authUtils'
 import SocialAccountManager from '../components/SocialAccountManager'
 import AISocialPostGenerator from '../components/AISocialPostGenerator'
-import LinkedInConnector from '../components/LinkedInConnector'
 
-// Placeholder components - we'll create these next
-const ConnectedAccounts = () => (
+// Connected Accounts component with shared state
+const ConnectedAccounts = ({ onAccountUpdate }: { onAccountUpdate: () => void }) => (
   <div className="space-y-6">
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">LinkedIn Integration</h3>
-      <LinkedInConnector />
-    </div>
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Other Social Accounts</h3>
-      <SocialAccountManager />
+      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Social Media Accounts</h3>
+      <SocialAccountManager onAccountUpdate={onAccountUpdate} />
     </div>
   </div>
 )
@@ -64,22 +59,57 @@ const PostHistory = () => (
 export default function SocialAutomation() {
   const [activeTab, setActiveTab] = useState('accounts')
   const [loading, setLoading] = useState(true)
-  // const [user] = useState<any>(null)
+  const [connectedAccounts] = useState<any[]>([])
+  const [scheduledPosts] = useState<any[]>([])
+  const [publishedPosts] = useState<any[]>([])
 
-  // Load user data
-  useState(() => {
-    const loadUser = async () => {
+  // Load user data and stats
+  useEffect(() => {
+    const loadData = async () => {
       try {
+        setLoading(true)
         // const currentUser = await getCurrentUser()
         // setUser(currentUser)
+        
+        // Load connected accounts
+        // await loadConnectedAccounts()
+        
+        // Load scheduled posts
+        // await loadScheduledPosts()
+        
+        // Load published posts
+        // await loadPublishedPosts()
       } catch (error) {
-        console.error('Error loading user:', error)
+        console.error('Error loading data:', error)
       } finally {
         setLoading(false)
       }
     }
-    loadUser()
-  })
+    loadData()
+  }, [])
+
+  // Handle account updates
+  const handleAccountUpdate = () => {
+    // Refresh all data when accounts are updated
+    loadConnectedAccounts()
+    loadScheduledPosts()
+    loadPublishedPosts()
+  }
+
+  // Load connected accounts
+  const loadConnectedAccounts = async () => {
+    // Implementation will be added
+  }
+
+  // Load scheduled posts
+  const loadScheduledPosts = async () => {
+    // Implementation will be added
+  }
+
+  // Load published posts
+  const loadPublishedPosts = async () => {
+    // Implementation will be added
+  }
 
   const tabs = [
     { id: 'accounts', name: 'Connected Accounts', icon: '🔗' },
@@ -91,7 +121,7 @@ export default function SocialAutomation() {
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'accounts':
-        return <ConnectedAccounts />
+        return <ConnectedAccounts onAccountUpdate={handleAccountUpdate} />
       case 'create':
         return <CreatePost />
       case 'upcoming':
@@ -99,7 +129,7 @@ export default function SocialAutomation() {
       case 'history':
         return <PostHistory />
       default:
-        return <ConnectedAccounts />
+        return <ConnectedAccounts onAccountUpdate={handleAccountUpdate} />
     }
   }
 
@@ -124,6 +154,7 @@ export default function SocialAutomation() {
             Manage your social media presence with automated posting and scheduling
           </p>
         </div>
+
 
         {/* Tab Navigation */}
         <div className="mb-8">
@@ -162,15 +193,15 @@ export default function SocialAutomation() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Connected Accounts</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">0</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{connectedAccounts.length}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Scheduled Posts</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">0</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{scheduledPosts.length}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Published This Week</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">0</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{publishedPosts.length}</span>
                 </div>
               </div>
             </div>

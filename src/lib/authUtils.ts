@@ -1,5 +1,6 @@
 // Utility functions for authentication and guest mode
 import { supabase } from './supabaseClient'
+import { clearLinkedInSession } from './linkedinOAuth'
 
 export const isGuestUser = (): boolean => {
   if (typeof window === 'undefined') return false
@@ -13,9 +14,13 @@ export const getGuestUser = () => {
 }
 
 export const clearGuestSession = () => {
+  console.log('🚪 clearGuestSession called')
   if (typeof window === 'undefined') return
   localStorage.removeItem('is_guest')
   localStorage.removeItem('guest_session')
+  // Also clear LinkedIn session when clearing guest session
+  console.log('🚪 Clearing LinkedIn session from clearGuestSession')
+  clearLinkedInSession()
 }
 
 export const getCurrentUser = async () => {

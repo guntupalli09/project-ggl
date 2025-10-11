@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { isGuestUser, getCurrentUser, clearGuestSession } from '../lib/authUtils'
 import { useTheme } from '../hooks/useTheme'
+import { clearLinkedInSession } from '../lib/linkedinOAuth'
+import QRCodeGenerator from '../components/QRCodeGenerator'
+import GoogleCalendarIntegration from '../components/GoogleCalendarIntegration'
+import BusinessCalendarView from '../components/BusinessCalendarView'
 
 interface UserProfile {
   id: string
@@ -21,12 +25,36 @@ export default function Profile() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [editing, setEditing] = useState(false)
+  const [showQRCode, setShowQRCode] = useState(false)
+  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false)
   const { toggleTheme, isDark } = useTheme()
   const [formData, setFormData] = useState({
     name: '',
-    company: ''
+    company: '',
+    booking_link: '',
+    business_slug: '',
+    twilio_phone_number: '',
+    business_phone: '',
+    missed_call_automation_enabled: false
   })
   const navigate = useNavigate()
+
+  // Handle URL parameters for Google Calendar integration
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const calendarSuccess = urlParams.get('calendar_success')
+    const calendarError = urlParams.get('calendar_error')
+
+    if (calendarSuccess === 'true') {
+      setSuccess('Google Calendar connected successfully!')
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else if (calendarError) {
+      setError(`Google Calendar connection failed: ${calendarError}`)
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [])
 
   // Load user profile
   useEffect(() => {
@@ -56,7 +84,8 @@ export default function Profile() {
           setUser(guestUser)
           setFormData({
             name: guestUser.name,
-            company: guestUser.company
+            company: guestUser.company,
+            booking_link: ''
           })
         } else {
           // Get user profile from Supabase
@@ -66,8 +95,19 @@ export default function Profile() {
             .eq('user_id', currentUser.id)
             .single()
 
+          // Get user settings (including all fields)
+          const { data: settings, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('booking_link, business_slug, twilio_phone_number, business_phone, missed_call_automation_enabled')
+            .eq('user_id', currentUser.id)
+            .single()
+
           if (error && error.code !== 'PGRST116') {
             console.error('Error loading profile:', error)
+          }
+
+          if (settingsError && settingsError.code !== 'PGRST116') {
+            console.error('Error loading settings:', settingsError)
           }
 
           const userProfile = {
@@ -82,7 +122,12 @@ export default function Profile() {
           setUser(userProfile)
           setFormData({
             name: userProfile.name,
-            company: userProfile.company
+            company: userProfile.company,
+            booking_link: settings?.booking_link || '',
+            business_slug: settings?.business_slug || '',
+            twilio_phone_number: settings?.twilio_phone_number || '',
+            business_phone: settings?.business_phone || '',
+            missed_call_automation_enabled: settings?.missed_call_automation_enabled || false
           })
         }
 
@@ -96,7 +141,27 @@ export default function Profile() {
     }
 
     loadUserProfile()
+    checkGoogleCalendarStatus()
   }, [navigate])
+
+  const checkGoogleCalendarStatus = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('google_calendar_connected, google_access_token')
+        .eq('user_id', user.id)
+        .single()
+
+      if (settings?.google_calendar_connected && settings?.google_access_token) {
+        setGoogleCalendarConnected(true)
+      }
+    } catch (err) {
+      console.error('Error checking Google Calendar status:', err)
+    }
+  }
 
   // Theme is now managed by useTheme hook
 
@@ -118,7 +183,8 @@ export default function Profile() {
     setSuccess('')
 
     try {
-      const { error } = await supabase
+      // Save profile data
+      const { error: profileError } = await supabase
         .from('user_profiles')
         .upsert([{
           user_id: user.id,
@@ -130,9 +196,59 @@ export default function Profile() {
           onConflict: 'user_id'
         })
 
-      if (error) {
-        console.error('Error saving profile:', error)
+      // Save booking link to user_settings
+      // First try to update existing record
+      const { data: existingSettings, error: fetchError } = await supabase
+        .from('user_settings')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+
+      let settingsError = null
+
+      if (existingSettings) {
+        // Update existing record
+        const { error } = await supabase
+          .from('user_settings')
+          .update({
+            booking_link: formData.booking_link,
+            business_slug: formData.business_slug,
+            twilio_phone_number: formData.twilio_phone_number,
+            business_phone: formData.business_phone,
+            missed_call_automation_enabled: formData.missed_call_automation_enabled,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id)
+        settingsError = error
+      } else {
+        // Insert new record
+        const { error } = await supabase
+          .from('user_settings')
+          .insert([{
+            user_id: user.id,
+            booking_link: formData.booking_link,
+            business_slug: formData.business_slug,
+            twilio_phone_number: formData.twilio_phone_number,
+            business_phone: formData.business_phone,
+            missed_call_automation_enabled: formData.missed_call_automation_enabled
+          }])
+        settingsError = error
+      }
+
+      if (profileError) {
+        console.error('Error saving profile:', profileError)
         setError('Failed to save profile')
+      } else if (settingsError) {
+        console.error('Error saving settings:', settingsError)
+        if (settingsError.code === 'PGRST116') {
+          setError('Database table not found. Please run the migration script in Supabase SQL Editor.')
+        } else if (settingsError.code === '42501') {
+          setError('Permission denied. Please check your database permissions.')
+        } else if (settingsError.message?.includes('ON CONFLICT')) {
+          setError('Database constraint error. Please run the quick_fix_user_settings.sql script in Supabase SQL Editor.')
+        } else {
+          setError(`Failed to save settings: ${settingsError.message}`)
+        }
       } else {
         setSuccess('Profile updated successfully!')
         setEditing(false)
@@ -153,11 +269,18 @@ export default function Profile() {
   }
 
   const handleLogout = async () => {
+    console.log('🚪 Profile handleLogout called')
+    // Clear LinkedIn session
+    clearLinkedInSession()
+    
     if (user?.is_guest) {
+      console.log('🚪 Clearing guest session from Profile')
       clearGuestSession()
     } else {
+      console.log('🚪 Signing out from Supabase from Profile')
       await supabase.auth.signOut()
     }
+    console.log('🚪 Navigating to login from Profile')
     navigate('/login')
   }
 
@@ -290,6 +413,187 @@ export default function Profile() {
                     )}
                   </div>
 
+                  {/* Booking Link */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Booking Link
+                    </label>
+                    {editing ? (
+                      <input
+                        type="url"
+                        name="booking_link"
+                        value={formData.booking_link}
+                        onChange={handleInputChange}
+                        className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                        placeholder="https://calendly.com/yourlink"
+                      />
+                    ) : (
+                      <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                        {formData.booking_link || 'Not set'}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      This link will be included in your AI-generated outreach messages
+                    </p>
+                  </div>
+
+                  {/* Business Slug */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Lead Capture URL
+                    </label>
+                    {editing ? (
+                      <div>
+                        <input
+                          type="text"
+                          name="business_slug"
+                          value={formData.business_slug}
+                          onChange={handleInputChange}
+                          className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                          placeholder="my-business-name"
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Your public lead capture form will be available at: <br />
+                          <span className="font-mono text-blue-600 dark:text-blue-400">
+                            {window.location.origin}/leads/{formData.business_slug || 'your-slug'}
+                          </span>
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                          {formData.business_slug || 'Not set'}
+                        </p>
+                        {formData.business_slug && (
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Your lead capture form: <br />
+                            <a 
+                              href={`/leads/${formData.business_slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              {window.location.origin}/leads/{formData.business_slug}
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Create a custom URL for your lead capture form. Use lowercase letters, numbers, and hyphens only.
+                    </p>
+                    
+                    {/* QR Code Generation */}
+                    {formData.business_slug && (
+                      <div className="mt-4">
+                        <button
+                          onClick={() => setShowQRCode(true)}
+                          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                          </svg>
+                          Generate QR Code
+                        </button>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Create a QR code for easy sharing of your lead capture form
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Twilio Settings */}
+                  <div className="border-t pt-6">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                      Missed Call Automation
+                    </h3>
+                    
+                    {/* Twilio Phone Number */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Twilio Phone Number
+                      </label>
+                      {editing ? (
+                        <input
+                          type="tel"
+                          name="twilio_phone_number"
+                          value={formData.twilio_phone_number}
+                          onChange={handleInputChange}
+                          className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                          placeholder="+1234567890"
+                        />
+                      ) : (
+                        <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                          {formData.twilio_phone_number || 'Not configured'}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Your Twilio phone number for receiving calls (format: +1234567890)
+                      </p>
+                    </div>
+
+                    {/* Business Phone */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Your Phone Number (for alerts)
+                      </label>
+                      {editing ? (
+                        <input
+                          type="tel"
+                          name="business_phone"
+                          value={formData.business_phone}
+                          onChange={handleInputChange}
+                          className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                          placeholder="+1234567890"
+                        />
+                      ) : (
+                        <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                          {formData.business_phone || 'Not configured'}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Phone number to receive missed call alerts
+                      </p>
+                    </div>
+
+                    {/* Missed Call Automation Toggle */}
+                    <div className="mb-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          name="missed_call_automation_enabled"
+                          checked={formData.missed_call_automation_enabled}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            missed_call_automation_enabled: e.target.checked
+                          }))}
+                          disabled={!editing}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded disabled:opacity-50"
+                        />
+                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                          Enable missed call SMS automation
+                        </span>
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        When enabled, automatically sends SMS responses to missed calls and alerts you
+                      </p>
+                    </div>
+
+                    {formData.missed_call_automation_enabled && formData.twilio_phone_number && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                          Webhook URL for Twilio
+                        </h4>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
+                          Configure this URL in your Twilio phone number settings:
+                        </p>
+                        <code className="block text-xs bg-white dark:bg-gray-800 p-2 rounded border text-gray-800 dark:text-gray-200 break-all">
+                          {window.location.origin}/api/twilio/incoming-call
+                        </code>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Action Buttons */}
                   <div className="flex justify-end space-x-3">
                     {editing ? (
@@ -299,7 +603,12 @@ export default function Profile() {
                             setEditing(false)
                             setFormData({
                               name: user.name || '',
-                              company: user.company || ''
+                              company: user.company || '',
+                              booking_link: formData.booking_link,
+                              business_slug: formData.business_slug,
+                              twilio_phone_number: formData.twilio_phone_number,
+                              business_phone: formData.business_phone,
+                              missed_call_automation_enabled: formData.missed_call_automation_enabled
                             })
                           }}
                           className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -409,6 +718,18 @@ export default function Profile() {
                 </div>
               </div>
 
+              {/* Google Calendar Integration */}
+              <div className="mb-6">
+                <GoogleCalendarIntegration onConnectionChange={setGoogleCalendarConnected} />
+              </div>
+
+              {/* Business Calendar View - Only show when connected */}
+              {googleCalendarConnected && (
+                <div className="mb-6">
+                  <BusinessCalendarView onError={(error) => setError(error)} />
+                </div>
+              )}
+
               {/* Logout */}
               <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div className="p-6">
@@ -424,6 +745,15 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* QR Code Modal */}
+      {showQRCode && formData.business_slug && (
+        <QRCodeGenerator
+          businessSlug={formData.business_slug}
+          businessName={formData.company || user?.name || 'Your Business'}
+          onClose={() => setShowQRCode(false)}
+        />
+      )}
     </div>
   )
 }

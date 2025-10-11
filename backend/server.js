@@ -11,7 +11,12 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5176'],
+  origin: [
+    'http://localhost:5173', 
+    'http://localhost:5176',
+    'https://www.getgetleads.com',
+    'https://getgetleads.com'
+  ],
   credentials: true
 }));
 app.use(express.json());
@@ -19,12 +24,34 @@ app.use(express.json());
 // Store state for CSRF protection (in production, use Redis or database)
 const stateStore = new Map();
 
+// Helper function to clean up expired states
+const cleanupExpiredStates = () => {
+  const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
+  for (const [key, value] of stateStore.entries()) {
+    if (value.timestamp < thirtyMinutesAgo) {
+      console.log('Cleaning up expired state:', key);
+      stateStore.delete(key);
+    }
+  }
+};
+
+// Clean up expired states every 5 minutes
+setInterval(cleanupExpiredStates, 5 * 60 * 1000);
+
 // LinkedIn OAuth configuration
 const LINKEDIN_CONFIG = {
   clientId: process.env.LINKEDIN_CLIENT_ID,
   clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
   redirectUri: process.env.LINKEDIN_REDIRECT_URI || 'http://localhost:5173/linkedin/callback',
   scope: 'openid profile email w_member_social'
+};
+
+// Get the correct redirect URI based on environment
+const getRedirectUri = () => {
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://www.getgetleads.com/linkedin/callback';
+  }
+  return process.env.LINKEDIN_REDIRECT_URI || 'http://localhost:5173/linkedin/callback';
 };
 
 // Generate LinkedIn OAuth URL
@@ -36,19 +63,26 @@ app.get('/api/linkedin/auth', (req, res) => {
       timestamp: Date.now(),
       userId: req.query.userId || 'anonymous'
     });
+    
+    console.log('Generated state:', state);
+    console.log('State store size:', stateStore.size);
 
-    // Clean up old states (older than 10 minutes)
-    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    // Clean up old states (older than 30 minutes)
+    const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
     for (const [key, value] of stateStore.entries()) {
-      if (value.timestamp < tenMinutesAgo) {
+      if (value.timestamp < thirtyMinutesAgo) {
+        console.log('Cleaning up old state:', key);
         stateStore.delete(key);
       }
     }
 
+    const redirectUri = getRedirectUri();
+    console.log('Using redirect URI:', redirectUri);
+    
     const authUrl = new URL('https://www.linkedin.com/oauth/v2/authorization');
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('client_id', LINKEDIN_CONFIG.clientId);
-    authUrl.searchParams.set('redirect_uri', LINKEDIN_CONFIG.redirectUri);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('scope', LINKEDIN_CONFIG.scope);
 
@@ -79,10 +113,21 @@ app.post('/api/linkedin/callback', async (req, res) => {
     }
 
     // Verify state for CSRF protection
+    console.log('Received state:', state);
+    console.log('Available states:', Array.from(stateStore.keys()));
+    console.log('State store size:', stateStore.size);
+    
     if (!stateStore.has(state)) {
+      console.log('State not found in store');
+      console.log('This usually means the server was restarted or the state expired');
       return res.status(400).json({
         success: false,
-        error: 'Invalid state parameter'
+        error: 'Invalid state parameter. Please try connecting again.',
+        debug: {
+          receivedState: state,
+          availableStates: Array.from(stateStore.keys()),
+          stateCount: stateStore.size
+        }
       });
     }
 
@@ -90,10 +135,13 @@ app.post('/api/linkedin/callback', async (req, res) => {
     stateStore.delete(state);
 
     // Exchange code for access token
+    const redirectUri = getRedirectUri();
+    console.log('Using redirect URI for token exchange:', redirectUri);
+    
     const tokenResponse = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', {
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: LINKEDIN_CONFIG.redirectUri,
+      redirect_uri: redirectUri,
       client_id: LINKEDIN_CONFIG.clientId,
       client_secret: LINKEDIN_CONFIG.clientSecret
     }, {
@@ -174,6 +222,16 @@ app.get('/api/linkedin/test/:accessToken', async (req, res) => {
       error: error.response?.data?.error_description || error.message
     });
   }
+});
+
+// Debug endpoint to check state store
+app.get('/api/debug/states', (req, res) => {
+  res.json({
+    success: true,
+    stateCount: stateStore.size,
+    states: Array.from(stateStore.keys()),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Health check

@@ -1,73 +1,112 @@
+import React, { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
-import { supabase } from '../lib/supabaseClient'
-
-interface Contact {
-  id: string
-  user_id: string
-  name: string
-  company: string
-  email: string
-  status: 'Prospect' | 'Contacted' | 'In Progress' | 'Closed'
-  notes: string
-  created_at: string
-  updated_at: string
-}
+import { Lead } from '../hooks/useLeads'
+import {
+  ClockIcon,
+  PhoneIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  XCircleIcon
+} from '@heroicons/react/24/outline'
 
 interface PipelineBoardProps {
-  contacts: Contact[]
-  onContactUpdate: () => void
-  onEditContact: (contact: Contact) => void
-  onDeleteContact: (id: string) => void
-  onGenerateSequence: (contact: Contact) => void
+  contacts: Lead[] | undefined
+  onContactUpdate: () => Promise<void>
+  onEditContact: (contact: Lead) => void
+  onDeleteContact: (id: string) => Promise<void>
 }
 
-const COLUMNS = [
-  { id: 'Prospect', title: 'Prospect', color: 'bg-gray-100' },
-  { id: 'Contacted', title: 'Contacted', color: 'bg-blue-100' },
-  { id: 'In Progress', title: 'In Progress', color: 'bg-yellow-100' },
-  { id: 'Closed', title: 'Closed', color: 'bg-green-100' }
-] as const
+interface Column {
+  id: string
+  title: string
+  status: string
+  color: string
+  icon: React.ComponentType<any>
+}
 
-const getStatusColor = (status: Contact['status']) => {
-  switch (status) {
-    case 'Prospect':
-      return 'bg-gray-100 text-gray-800'
-    case 'Contacted':
-      return 'bg-blue-100 text-blue-800'
-    case 'In Progress':
-      return 'bg-yellow-100 text-yellow-800'
-    case 'Closed':
-      return 'bg-green-100 text-green-800'
-    default:
-      return 'bg-gray-100 text-gray-800'
+const columns: Column[] = [
+  {
+    id: 'new',
+    title: 'New',
+    status: 'new',
+    color: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-200',
+    icon: ClockIcon
+  },
+  {
+    id: 'contacted',
+    title: 'Contacted',
+    status: 'contacted',
+    color: 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900 dark:border-yellow-700 dark:text-yellow-200',
+    icon: PhoneIcon
+  },
+  {
+    id: 'booked',
+    title: 'Booked',
+    status: 'booked',
+    color: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-900 dark:border-purple-700 dark:text-purple-200',
+    icon: CalendarIcon
+  },
+  {
+    id: 'completed',
+    title: 'Completed',
+    status: 'completed',
+    color: 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900 dark:border-green-700 dark:text-green-200',
+    icon: CheckCircleIcon
   }
-}
+]
 
-export default function PipelineBoard({ 
-  contacts, 
-  onContactUpdate, 
-  onEditContact, 
-  onDeleteContact,
-  onGenerateSequence
-}: PipelineBoardProps) {
-  // Group contacts by status
-  const contactsByStatus = contacts.reduce((acc, contact) => {
-    if (!acc[contact.status]) {
-      acc[contact.status] = []
+export default function PipelineBoard({ contacts, onContactUpdate, onEditContact, onDeleteContact }: PipelineBoardProps) {
+  const [leadsByStatus, setLeadsByStatus] = useState<Record<string, Lead[]>>({})
+
+  // Group leads by status
+  useEffect(() => {
+    if (!contacts) {
+      console.log('PipelineBoard: contacts is undefined')
+      setLeadsByStatus({})
+      return
     }
-    acc[contact.status].push(contact)
-    return acc
-  }, {} as Record<string, Contact[]>)
+    
+    console.log('PipelineBoard: contacts changed', contacts.length)
+    const grouped = contacts.reduce((acc, lead) => {
+      const status = lead.status || 'new'
+      if (!acc[status]) {
+        acc[status] = []
+      }
+      acc[status].push(lead)
+      return acc
+    }, {} as Record<string, Lead[]>)
+
+    // Ensure all columns have an array
+    columns.forEach(column => {
+      if (!grouped[column.status]) {
+        grouped[column.status] = []
+      }
+    })
+
+    console.log('PipelineBoard: grouped leads', grouped)
+    setLeadsByStatus(grouped)
+  }, [contacts])
+
+  // Don't render if no contacts
+  if (!contacts || contacts.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500 dark:text-gray-400">No leads to display</p>
+      </div>
+    )
+  }
 
   const handleDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result
 
-    // If dropped outside a valid drop zone
+    console.log('Drag end result:', { destination, source, draggableId })
+    console.log('Available droppable IDs:', columns.map(col => col.id))
+
     if (!destination) {
+      console.log('No destination, drag cancelled')
       return
     }
 
-    // If dropped in the same position
     if (
       destination.droppableId === source.droppableId &&
       destination.index === source.index
@@ -75,134 +114,189 @@ export default function PipelineBoard({
       return
     }
 
-    const newStatus = destination.droppableId as Contact['status']
-    const contactId = draggableId
+    const sourceColumn = columns.find(col => col.id === source.droppableId)
+    const destColumn = columns.find(col => col.id === destination.droppableId)
 
-    try {
-      // Update the contact status in Supabase
-      const { error } = await supabase
-        .from('crm_contacts')
-        .update({ status: newStatus })
-        .eq('id', contactId)
+    console.log('Source column:', sourceColumn)
+    console.log('Destination column:', destColumn)
 
-      if (error) {
-        console.error('Error updating contact status:', error)
-        return
-      }
-
-      // Refresh the contacts list
-      onContactUpdate()
-    } catch (error) {
-      console.error('Error updating contact:', error)
+    if (!sourceColumn || !destColumn) {
+      console.error('Column not found:', { sourceColumn, destColumn })
+      return
     }
+
+    // Find the contact being moved
+    if (!contacts) {
+      console.error('Contacts array is undefined')
+      return
+    }
+    
+    const contact = contacts.find(c => c.id === draggableId)
+    console.log('Found contact:', contact)
+    console.log('Available contacts:', contacts.map(c => c.id))
+    if (!contact) {
+      console.error('Contact not found:', draggableId)
+      return
+    }
+
+    // Update the contact's status
+    try {
+      console.log(`Updating contact ${contact.id} from ${sourceColumn.status} to ${destColumn.status}`)
+      
+      // Update the contact status in the local state first
+      setLeadsByStatus(prev => {
+        const newState = { ...prev }
+        
+        // Remove from source column
+        if (newState[sourceColumn.id]) {
+          newState[sourceColumn.id] = newState[sourceColumn.id].filter(c => c.id !== contact.id)
+        }
+        
+        // Add to destination column with updated status
+        if (!newState[destColumn.id]) {
+          newState[destColumn.id] = []
+        }
+        newState[destColumn.id].push({
+          ...contact,
+          status: destColumn.status as Lead['status']
+        })
+        
+        return newState
+      })
+      
+      // Trigger parent component refresh
+      await onContactUpdate()
+      console.log('Contact status updated successfully')
+    } catch (error) {
+      console.error('Error updating contact status:', error)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    })
   }
 
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Sales Pipeline</h2>
-        <p className="text-gray-600">Drag and drop contacts between stages</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          Lead Pipeline
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400">
+          Drag and drop leads between stages to update their status
+        </p>
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {COLUMNS.map((column) => (
-            <div key={column.id} className="flex flex-col">
-              <div className={`${column.color} rounded-lg p-4 mb-4`}>
-                <h3 className="font-semibold text-gray-800 text-center">
-                  {column.title}
-                </h3>
-                <p className="text-sm text-gray-600 text-center">
-                  {contactsByStatus[column.id]?.length || 0} contacts
-                </p>
-              </div>
+          {columns.map((column) => {
+            const columnLeads = leadsByStatus[column.status] || []
+            const IconComponent = column.icon
 
-              <Droppable droppableId={column.id}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`min-h-[400px] p-2 rounded-lg border-2 border-dashed transition-colors ${
-                      snapshot.isDraggingOver
-                        ? 'border-indigo-400 bg-indigo-50'
-                        : 'border-gray-200 bg-gray-50'
-                    }`}
-                  >
-                    {contactsByStatus[column.id]?.map((contact, index) => (
-                      <Draggable
-                        key={contact.id}
-                        draggableId={contact.id}
-                        index={index}
-                      >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className={`mb-3 p-4 bg-white rounded-lg shadow-sm border transition-all ${
-                              snapshot.isDragging
-                                ? 'shadow-lg transform rotate-2'
-                                : 'hover:shadow-md'
-                            }`}
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="font-medium text-gray-900 text-sm truncate">
-                                {contact.name}
-                              </h4>
-                              <div className="flex space-x-1">
-                                <button
-                                  onClick={() => onGenerateSequence(contact)}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Sequence
-                                </button>
-                                <button
-                                  onClick={() => onEditContact(contact)}
-                                  className="text-indigo-600 hover:text-indigo-800 text-xs"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => onDeleteContact(contact.id)}
-                                  className="text-red-600 hover:text-red-800 text-xs"
-                                >
-                                  Delete
-                                </button>
+            console.log(`Rendering column: ${column.id} with ${columnLeads.length} leads`)
+
+            return (
+              <div key={column.id} className="flex flex-col" data-column-id={column.id}>
+                {/* Column Header */}
+                <div className={`${column.color} rounded-lg p-4 mb-4 border-2`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <IconComponent className="h-5 w-5" />
+                      <h3 className="font-semibold">{column.title}</h3>
+                    </div>
+                    <span className="bg-white dark:bg-gray-800 px-2 py-1 rounded-full text-sm font-medium">
+                      {columnLeads.length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Droppable Area */}
+                <Droppable droppableId={column.id} key={`droppable-${column.id}`}>
+                  {(provided, snapshot) => {
+                    console.log(`Droppable ${column.id} rendered, isDraggingOver: ${snapshot.isDraggingOver}`)
+                    return (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`min-h-[400px] p-2 rounded-lg border-2 border-dashed transition-colors ${
+                        snapshot.isDraggingOver
+                          ? 'border-indigo-300 bg-indigo-50 dark:border-indigo-600 dark:bg-indigo-900/20'
+                          : 'border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      {columnLeads.map((lead, index) => (
+                        <Draggable
+                          key={lead.id}
+                          draggableId={lead.id}
+                          index={index}
+                        >
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className={`mb-3 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow ${
+                                snapshot.isDragging ? 'shadow-lg rotate-2' : ''
+                              }`}
+                            >
+                              {/* Lead Card Content */}
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {lead.name}
+                                    </h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                      {lead.email}
+                                    </p>
+                                    {lead.phone && (
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {lead.phone}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {lead.notes && (
+                                  <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">
+                                    {lead.notes}
+                                  </p>
+                                )}
+
+                                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                                  <span>{formatDate(lead.created_at)}</span>
+                                  {lead.source && (
+                                    <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                      {lead.source}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex justify-end">
+                                  <button
+                                    onClick={() => onLeadDelete(lead.id)}
+                                    className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded"
+                                    title="Delete lead"
+                                  >
+                                    <XCircleIcon className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
-
-                            <p className="text-xs text-gray-600 truncate mb-2">
-                              {contact.company}
-                            </p>
-
-                            <p className="text-xs text-gray-500 truncate mb-3">
-                              {contact.email}
-                            </p>
-
-                            {contact.notes && (
-                              <p className="text-xs text-gray-600 line-clamp-2 mb-3">
-                                {contact.notes}
-                              </p>
-                            )}
-
-                            <div className="flex justify-between items-center">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(contact.status)}`}>
-                                {contact.status}
-                              </span>
-                              <span className="text-xs text-gray-400">
-                                {new Date(contact.updated_at).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </div>
-          ))}
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                    )
+                  }}
+                </Droppable>
+              </div>
+            )
+          })}
         </div>
       </DragDropContext>
     </div>

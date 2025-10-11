@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { getCurrentUser } from '../lib/authUtils'
 import { generateText, checkOllamaStatus, DEFAULT_MODEL } from '../lib/ollamaClient'
 import { postToPlatform, isTokenExpired, refreshAccessToken } from '../lib/socialOAuth'
+import { isLinkedInConnected, getLinkedInSession } from '../lib/linkedinOAuth'
 
 interface PostData {
   platform: 'linkedin' | 'facebook' | 'instagram'
@@ -167,19 +168,9 @@ export default function AISocialPostGenerator() {
     // Check Supabase connected accounts
     const supabaseConnected = connectedAccounts.some(account => account.platform === platform)
     
-    // Check localStorage for LinkedIn connection
+    // Check LinkedIn connection using centralized function
     if (platform === 'linkedin') {
-      const linkedinToken = localStorage.getItem('linkedin_access_token')
-      const linkedinExpires = localStorage.getItem('linkedin_expires_at')
-      
-      if (linkedinToken && linkedinExpires) {
-        // Check if token is not expired
-        const expiresAt = new Date(linkedinExpires)
-        const now = new Date()
-        if (expiresAt > now) {
-          return true
-        }
-      }
+      return isLinkedInConnected()
     }
     
     return supabaseConnected
@@ -266,22 +257,26 @@ export default function AISocialPostGenerator() {
       let accessToken = ''
       
       if (formData.platform === 'linkedin') {
-        // Get LinkedIn token from localStorage
-        const linkedinToken = localStorage.getItem('linkedin_access_token')
-        const linkedinExpires = localStorage.getItem('linkedin_expires_at')
-        
-        if (!linkedinToken || !linkedinExpires) {
+        // Get LinkedIn token using centralized function
+        if (!isLinkedInConnected()) {
           throw new Error('LinkedIn account not connected')
         }
         
-        // Check if token is expired
-        const expiresAt = new Date(linkedinExpires)
-        const now = new Date()
-        if (expiresAt <= now) {
-          throw new Error('LinkedIn token has expired. Please reconnect your account.')
+        const linkedinSession = getLinkedInSession()
+        if (!linkedinSession || !linkedinSession.tokens) {
+          throw new Error('LinkedIn session not found. Please reconnect your account.')
         }
         
-        accessToken = linkedinToken
+        const { tokens } = linkedinSession
+        if (tokens.expires_at) {
+          const expiresAt = new Date(tokens.expires_at)
+          const now = new Date()
+          if (expiresAt <= now) {
+            throw new Error('LinkedIn token has expired. Please reconnect your account.')
+          }
+        }
+        
+        accessToken = tokens.access_token
       } else {
         // Get token from Supabase for other platforms
         const account = connectedAccounts.find(acc => acc.platform === formData.platform)
@@ -909,3 +904,5 @@ export default function AISocialPostGenerator() {
     </div>
   )
 }
+
+

@@ -15,10 +15,19 @@ interface LinkedInTokens {
   expires_at: string
 }
 
+// Get the backend URL based on environment
+const getBackendUrl = () => {
+  if (import.meta.env.PROD) {
+    return 'https://www.getgetleads.com/api'
+  }
+  return 'http://localhost:3001/api'
+}
+
 // Generate LinkedIn OAuth URL
 export const getLinkedInAuthUrl = async (): Promise<string> => {
   try {
-    const response = await fetch('http://localhost:3001/api/linkedin/auth', {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(`${backendUrl}/linkedin/auth`, {
       method: 'GET',
       credentials: 'include'
     })
@@ -32,20 +41,18 @@ export const getLinkedInAuthUrl = async (): Promise<string> => {
       throw new Error(data.error || 'Failed to generate auth URL')
     }
     
-    // Store state for verification
-    localStorage.setItem('oauth_state_linkedin', data.state)
-    
     return data.authUrl
   } catch (error) {
     console.error('Error getting LinkedIn auth URL:', error)
-    throw new Error('Failed to connect to backend server. Make sure it\'s running on port 3001.')
+    throw new Error('Failed to connect to backend server. Please try again.')
   }
 }
 
 // Exchange authorization code for access token
 export const exchangeLinkedInCode = async (code: string, state: string): Promise<LinkedInTokens & { profile: LinkedInProfile }> => {
   try {
-    const response = await fetch('http://localhost:3001/api/linkedin/callback', {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(`${backendUrl}/linkedin/callback`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,7 +86,8 @@ export const exchangeLinkedInCode = async (code: string, state: string): Promise
 // Get LinkedIn profile using access token
 export const getLinkedInProfile = async (accessToken: string): Promise<LinkedInProfile> => {
   try {
-    const response = await fetch(`http://localhost:3001/api/linkedin/test/${accessToken}`)
+    const backendUrl = getBackendUrl()
+    const response = await fetch(`${backendUrl}/linkedin/test/${accessToken}`)
     
     if (!response.ok) {
       const errorData = await response.json()
@@ -98,11 +106,11 @@ export const getLinkedInProfile = async (accessToken: string): Promise<LinkedInP
   }
 }
 
-// Verify state parameter
-export const verifyLinkedInState = (state: string): boolean => {
-  const storedState = localStorage.getItem('oauth_state_linkedin')
-  localStorage.removeItem('oauth_state_linkedin')
-  return storedState === state
+// Verify state parameter (handled by backend)
+export const verifyLinkedInState = (_state: string): boolean => {
+  // State verification is handled by the backend
+  // This function is kept for compatibility but not used
+  return true
 }
 
 // Check if token is expired
@@ -124,16 +132,96 @@ export const storeLinkedInSession = (tokens: LinkedInTokens, profile: LinkedInPr
 // Get LinkedIn session from localStorage
 export const getLinkedInSession = () => {
   const session = localStorage.getItem('linkedin_session')
-  return session ? JSON.parse(session) : null
+  if (session) {
+    try {
+      const parsed = JSON.parse(session)
+      return parsed
+    } catch (error) {
+      console.error('Error parsing LinkedIn session:', error)
+      return null
+    }
+  }
+  return null
 }
 
 // Clear LinkedIn session
 export const clearLinkedInSession = () => {
-  localStorage.removeItem('linkedin_session')
-  localStorage.removeItem('is_linkedin_connected')
+  console.log('🧹 Clearing LinkedIn session...')
+  
+  // Get all localStorage keys before clearing
+  const allKeys = Object.keys(localStorage)
+  const linkedinKeys = allKeys.filter(key => key.toLowerCase().includes('linkedin'))
+  
+  console.log('Before clearing - All LinkedIn keys found:', linkedinKeys)
+  console.log('Before clearing - Values:', {
+    linkedin_session: localStorage.getItem('linkedin_session'),
+    linkedin_access_token: localStorage.getItem('linkedin_access_token'),
+    linkedin_expires_at: localStorage.getItem('linkedin_expires_at'),
+    is_linkedin_connected: localStorage.getItem('is_linkedin_connected'),
+    oauth_state_linkedin: localStorage.getItem('oauth_state_linkedin')
+  })
+  
+  // Clear all possible LinkedIn keys
+  const keysToRemove = [
+    'linkedin_session',
+    'linkedin_access_token', 
+    'linkedin_expires_at',
+    'is_linkedin_connected',
+    'oauth_state_linkedin',
+    'linkedin_profile',
+    'linkedin_user',
+    'linkedin_token'
+  ]
+  
+  keysToRemove.forEach(key => {
+    if (localStorage.getItem(key)) {
+      console.log(`Removing key: ${key}`)
+      localStorage.removeItem(key)
+    }
+  })
+  
+  // Also clear any keys that contain 'linkedin' in their name
+  linkedinKeys.forEach(key => {
+    if (!keysToRemove.includes(key)) {
+      console.log(`Removing additional LinkedIn key: ${key}`)
+      localStorage.removeItem(key)
+    }
+  })
+  
+  console.log('After clearing - All LinkedIn keys remaining:', 
+    Object.keys(localStorage).filter(key => key.toLowerCase().includes('linkedin'))
+  )
+  console.log('After clearing - Values:', {
+    linkedin_session: localStorage.getItem('linkedin_session'),
+    linkedin_access_token: localStorage.getItem('linkedin_access_token'),
+    linkedin_expires_at: localStorage.getItem('linkedin_expires_at'),
+    is_linkedin_connected: localStorage.getItem('is_linkedin_connected'),
+    oauth_state_linkedin: localStorage.getItem('oauth_state_linkedin')
+  })
+  console.log('✅ LinkedIn session cleared')
+}
+
+// Debug function to inspect all localStorage
+export const debugLocalStorage = () => {
+  console.log('🔍 DEBUG: All localStorage keys and values:')
+  const allKeys = Object.keys(localStorage)
+  allKeys.forEach(key => {
+    const value = localStorage.getItem(key)
+    console.log(`  ${key}: ${value ? (value.length > 50 ? value.substring(0, 50) + '...' : value) : 'null'}`)
+  })
+  
+  const linkedinKeys = allKeys.filter(key => key.toLowerCase().includes('linkedin'))
+  console.log('🔍 DEBUG: LinkedIn-related keys:', linkedinKeys)
 }
 
 // Check if LinkedIn is connected
 export const isLinkedInConnected = (): boolean => {
-  return localStorage.getItem('is_linkedin_connected') === 'true'
+  const connected = localStorage.getItem('is_linkedin_connected') === 'true'
+  console.log('🔍 Checking LinkedIn connection:', {
+    is_linkedin_connected: localStorage.getItem('is_linkedin_connected'),
+    connected: connected,
+    linkedin_session: localStorage.getItem('linkedin_session') ? 'exists' : 'null',
+    linkedin_access_token: localStorage.getItem('linkedin_access_token') ? 'exists' : 'null'
+  })
+  return connected
 }
