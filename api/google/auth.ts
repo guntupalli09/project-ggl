@@ -29,10 +29,10 @@ export default async function handler(req: any, res: any) {
     }
 
     // Google OAuth configuration
-    const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
     const REDIRECT_URI = process.env.NODE_ENV === 'production' 
-      ? 'https://www.getgetleads.com/api/google/callback'
-      : 'http://localhost:5173/api/google/callback'
+      ? 'https://www.getgetleads.com/profile'
+      : 'http://localhost:5173/profile'
 
     if (!GOOGLE_CLIENT_ID) {
       return res.status(500).json({ error: 'Google Client ID not configured' })

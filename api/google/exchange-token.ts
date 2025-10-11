@@ -6,11 +6,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { code, redirect_uri } = req.body
+    const { code } = req.body
 
-    if (!code || !redirect_uri) {
-      return res.status(400).json({ error: 'Missing code or redirect_uri' })
+    if (!code) {
+      return res.status(400).json({ error: 'Missing code' })
     }
+
+    // Use the correct redirect URI for production
+    const redirect_uri = process.env.NODE_ENV === 'production' 
+      ? 'https://www.getgetleads.com/profile'
+      : 'http://localhost:5173/profile'
 
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
