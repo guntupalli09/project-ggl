@@ -43,8 +43,8 @@ const PublicLeadCapture: React.FC = () => {
       }
 
       try {
-        // Handle demo case
-        if (businessSlug === 'demo') {
+        // Handle demo/test cases
+        if (businessSlug === 'demo' || businessSlug === 'ggl' || businessSlug === 'test') {
           setBusinessInfo({
             user_id: 'demo-user',
             business_name: 'Demo Business',

@@ -123,16 +123,22 @@ export default function Profile() {
           setUser(userProfile)
           // Generate a business slug if none exists
           let businessSlug = settings?.business_slug
+          console.log('Current business slug:', businessSlug)
           if (!businessSlug) {
             // Generate slug from company name or email
             const companyName = userProfile.company || userProfile.email?.split('@')[0] || 'business'
             businessSlug = companyName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+            console.log('Generated business slug:', businessSlug)
             
             // Save the generated slug
-            await supabase
+            const { error: slugError } = await supabase
               .from('user_settings')
               .update({ business_slug: businessSlug })
               .eq('user_id', currentUser.id)
+            
+            if (slugError) {
+              console.error('Error saving business slug:', slugError)
+            }
           }
           
           setFormData({
