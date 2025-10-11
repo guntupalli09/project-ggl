@@ -1,5 +1,36 @@
 import { createClient } from '@supabase/supabase-js'
-import { generateText } from '../../src/lib/ollamaClient'
+// Self-contained AI response generation for serverless environment
+async function generateAIResponse(prompt: string): Promise<string> {
+  try {
+    // Use OpenAI if available, otherwise return a fallback message
+    if (process.env.OPENAI_API_KEY) {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 200,
+          temperature: 0.7
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        return data.choices[0]?.message?.content || 'Thank you for your interest. We will get back to you soon.'
+      }
+    }
+    
+    // Fallback message if OpenAI is not available
+    return 'Thank you for your interest. We will get back to you soon.'
+  } catch (error) {
+    console.error('Error generating AI response:', error)
+    return 'Thank you for your interest. We will get back to you soon.'
+  }
+}
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -271,7 +302,7 @@ async function processLeadFollowUp(lead: Lead, automation: Automation, runId: st
     // Generate follow-up message using Ollama
     const prompt = `Write a gentle 2nd follow-up email for ${lead.name} about ${lead.notes || 'our services'}. Keep it professional, brief, and friendly. Don't be pushy.${bookingLink ? ` Include this booking link: ${bookingLink}` : ''}`
     
-    const followUpMessage = await generateText(prompt)
+    const followUpMessage = await generateAIResponse(prompt)
     
     if (!followUpMessage || followUpMessage.trim().length === 0) {
       const error = 'Failed to generate follow-up message'
