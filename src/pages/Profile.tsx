@@ -82,11 +82,12 @@ export default function Profile() {
             is_guest: true
           }
           setUser(guestUser)
-          setFormData({
+          setFormData(prev => ({
+            ...prev,
             name: guestUser.name,
             company: guestUser.company,
             booking_link: ''
-          })
+          }))
         } else {
           // Get user profile from Supabase
           const { data: profile, error } = await supabase
@@ -198,7 +199,7 @@ export default function Profile() {
 
       // Save booking link to user_settings
       // First try to update existing record
-      const { data: existingSettings, error: fetchError } = await supabase
+      const { data: existingSettings } = await supabase
         .from('user_settings')
         .select('id')
         .eq('user_id', user.id)

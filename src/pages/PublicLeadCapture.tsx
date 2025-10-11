@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { processLeadAtomically, validateLeadData, getBusinessUserId } from '../lib/atomicLeadProcessing'
+import { processLeadAtomically, validateLeadData } from '../lib/atomicLeadProcessing'
 
 interface BusinessInfo {
   user_id: string
@@ -112,7 +112,7 @@ const PublicLeadCapture: React.FC = () => {
         phone: formData.phone,
         source: 'HostedForm',
         notes: formData.message
-      }, businessSlug)
+      })
 
       if (result.success) {
         setSubmitted(true)

@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { useState, useEffect } from 'react'
 
 interface CalendarAnalyticsProps {
   events: any[]
@@ -337,7 +336,7 @@ export default function CalendarAnalytics({ events }: CalendarAnalyticsProps) {
           Monthly Trend (Last 6 Months)
         </h4>
         <div className="flex items-end space-x-2 h-32">
-          {analytics.monthlyTrend.map(({ month, count }, index) => {
+          {analytics.monthlyTrend.map(({ month, count }) => {
             const maxCount = Math.max(...analytics.monthlyTrend.map(m => m.count))
             const height = maxCount > 0 ? (count / maxCount) * 100 : 0
             

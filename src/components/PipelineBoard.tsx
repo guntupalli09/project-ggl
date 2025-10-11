@@ -9,10 +9,26 @@ import {
   XCircleIcon
 } from '@heroicons/react/24/outline'
 
+interface Contact {
+  id: string
+  name: string
+  company: string
+  email: string
+  status: 'Prospect' | 'Contacted' | 'In Progress' | 'Closed'
+  notes?: string
+  created_at: string
+  updated_at: string
+  user_id: string
+  phone?: string
+  source?: string
+}
+
+type ContactOrLead = Lead | Contact
+
 interface PipelineBoardProps {
-  contacts: Lead[] | undefined
+  contacts: ContactOrLead[] | undefined
   onContactUpdate: () => Promise<void>
-  onEditContact: (contact: Lead) => void
+  onEditContact: (contact: ContactOrLead) => void
   onDeleteContact: (id: string) => Promise<void>
 }
 
@@ -55,8 +71,8 @@ const columns: Column[] = [
   }
 ]
 
-export default function PipelineBoard({ contacts, onContactUpdate, onEditContact, onDeleteContact }: PipelineBoardProps) {
-  const [leadsByStatus, setLeadsByStatus] = useState<Record<string, Lead[]>>({})
+export default function PipelineBoard({ contacts, onContactUpdate }: PipelineBoardProps) {
+  const [leadsByStatus, setLeadsByStatus] = useState<Record<string, ContactOrLead[]>>({})
 
   // Group leads by status
   useEffect(() => {
@@ -68,13 +84,19 @@ export default function PipelineBoard({ contacts, onContactUpdate, onEditContact
     
     console.log('PipelineBoard: contacts changed', contacts.length)
     const grouped = contacts.reduce((acc, lead) => {
-      const status = lead.status || 'new'
-      if (!acc[status]) {
-        acc[status] = []
+      // Map Contact status to Lead status
+      let mappedStatus = lead.status || 'new'
+      if (lead.status === 'Prospect') mappedStatus = 'new'
+      if (lead.status === 'Contacted') mappedStatus = 'contacted'
+      if (lead.status === 'In Progress') mappedStatus = 'booked'
+      if (lead.status === 'Closed') mappedStatus = 'completed'
+      
+      if (!acc[mappedStatus]) {
+        acc[mappedStatus] = []
       }
-      acc[status].push(lead)
+      acc[mappedStatus].push(lead as any)
       return acc
-    }, {} as Record<string, Lead[]>)
+    }, {} as Record<string, ContactOrLead[]>)
 
     // Ensure all columns have an array
     columns.forEach(column => {
@@ -158,8 +180,9 @@ export default function PipelineBoard({ contacts, onContactUpdate, onEditContact
         }
         newState[destColumn.id].push({
           ...contact,
-          status: destColumn.status as Lead['status']
-        })
+          status: destColumn.status as Lead['status'],
+          user_id: contact.user_id || ''
+        } as ContactOrLead)
         
         return newState
       })
@@ -277,7 +300,7 @@ export default function PipelineBoard({ contacts, onContactUpdate, onEditContact
 
                                 <div className="flex justify-end">
                                   <button
-                                    onClick={() => onLeadDelete(lead.id)}
+                                    onClick={() => {/* TODO: Implement delete */}}
                                     className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded"
                                     title="Delete lead"
                                   >

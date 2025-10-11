@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import EventModal from './EventModal'
 
 interface CalendarEvent {
-  id: string
+  id?: string
   summary: string
   start: {
     dateTime?: string
@@ -31,7 +31,7 @@ interface BusinessCalendarViewProps {
   onEventDeleted?: () => void
 }
 
-export default function BusinessCalendarView({ onError, events: propEvents, onEventSaved, onEventDeleted }: BusinessCalendarViewProps) {
+export default function BusinessCalendarView({ onError, events: propEvents, onEventSaved }: BusinessCalendarViewProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -140,38 +140,38 @@ export default function BusinessCalendarView({ onError, events: propEvents, onEv
     }
   }
 
-  const formatTime = (dateTime: string) => {
-    const date = new Date(dateTime)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  // const formatTime = (dateTime: string) => {
+  //   const date = new Date(dateTime)
+  //   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  // }
 
-  const formatDate = (dateTime: string) => {
-    const date = new Date(dateTime)
-    return date.toLocaleDateString([], { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    })
-  }
+  // const formatDate = (dateTime: string) => {
+  //   const date = new Date(dateTime)
+  //   return date.toLocaleDateString([], { 
+  //     weekday: 'short', 
+  //     month: 'short', 
+  //     day: 'numeric' 
+  //   })
+  // }
 
-  const isEventToday = (event: CalendarEvent) => {
-    const today = new Date()
-    const eventDate = new Date(event.start.dateTime || event.start.date || '')
-    return eventDate.toDateString() === today.toDateString()
-  }
+  // const isEventToday = (event: CalendarEvent) => {
+  //   const today = new Date()
+  //   const eventDate = new Date(event.start.dateTime || event.start.date || '')
+  //   return eventDate.toDateString() === today.toDateString()
+  // }
 
-  const isEventUpcoming = (event: CalendarEvent) => {
-    const now = new Date()
-    const eventDate = new Date(event.start.dateTime || event.start.date || '')
-    return eventDate > now
-  }
+  // const isEventUpcoming = (event: CalendarEvent) => {
+  //   const now = new Date()
+  //   const eventDate = new Date(event.start.dateTime || event.start.date || '')
+  //   return eventDate > now
+  // }
 
-  const getEventStatusColor = (event: CalendarEvent) => {
-    if (event.status === 'confirmed') return 'bg-green-500'
-    if (event.status === 'tentative') return 'bg-yellow-500'
-    if (event.status === 'cancelled') return 'bg-red-500'
-    return 'bg-blue-500'
-  }
+  // const getEventStatusColor = (event: CalendarEvent) => {
+  //   if (event.status === 'confirmed') return 'bg-green-500'
+  //   if (event.status === 'tentative') return 'bg-yellow-500'
+  //   if (event.status === 'cancelled') return 'bg-red-500'
+  //   return 'bg-blue-500'
+  // }
 
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate)
@@ -273,19 +273,19 @@ export default function BusinessCalendarView({ onError, events: propEvents, onEv
     }
   }
 
-  const handleEventDeleted = () => {
-    if (selectedEvent) {
-      setEvents(prev => prev.filter(e => e.id !== selectedEvent.id))
-    }
-    setShowEventModal(false)
-    setSelectedEvent(null)
-    setEventModalDate(undefined)
-    
-    // Notify parent component
-    if (onEventDeleted) {
-      onEventDeleted()
-    }
-  }
+  // const handleEventDeleted = () => {
+  //   if (selectedEvent) {
+  //     setEvents(prev => prev.filter(e => e.id !== selectedEvent.id))
+  //   }
+  //   setShowEventModal(false)
+  //   setSelectedEvent(null)
+  //   setEventModalDate(undefined)
+  //   
+  //   // Notify parent component
+  //   if (onEventDeleted) {
+  //     onEventDeleted()
+  //   }
+  // }
 
   if (loading) {
     return (
@@ -586,7 +586,7 @@ function MonthView({
 function EventsList({ 
   events, 
   view, 
-  currentDate,
+  // currentDate,
   onEditEvent
 }: {
   events: CalendarEvent[]
@@ -594,7 +594,7 @@ function EventsList({
   currentDate: Date
   onEditEvent: (event: CalendarEvent) => void
 }) {
-  const today = new Date()
+  // const today = new Date()
   const upcomingEvents = events.filter(event => isEventUpcoming(event))
   const todayEvents = events.filter(event => isEventToday(event))
 
@@ -610,26 +610,26 @@ function EventsList({
     return eventDate.toDateString() === today.toDateString()
   }
 
-  function formatTime(dateTime: string) {
-    const date = new Date(dateTime)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  // function formatTime(dateTime: string) {
+  //   const date = new Date(dateTime)
+  //   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  // }
 
-  function formatDate(dateTime: string) {
-    const date = new Date(dateTime)
-    return date.toLocaleDateString([], { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    })
-  }
+  // function formatDate(dateTime: string) {
+  //   const date = new Date(dateTime)
+  //   return date.toLocaleDateString([], { 
+  //     weekday: 'short', 
+  //     month: 'short', 
+  //     day: 'numeric' 
+  //   })
+  // }
 
-  function getEventStatusColor(event: CalendarEvent) {
-    if (event.status === 'confirmed') return 'bg-green-500'
-    if (event.status === 'tentative') return 'bg-yellow-500'
-    if (event.status === 'cancelled') return 'bg-red-500'
-    return 'bg-blue-500'
-  }
+  // function getEventStatusColor(event: CalendarEvent) {
+  //   if (event.status === 'confirmed') return 'bg-green-500'
+  //   if (event.status === 'tentative') return 'bg-yellow-500'
+  //   if (event.status === 'cancelled') return 'bg-red-500'
+  //   return 'bg-blue-500'
+  // }
 
   if (events.length === 0) {
     return (
@@ -680,26 +680,26 @@ function EventsList({
 
 // Event Card Component
 function EventCard({ event, onEdit }: { event: CalendarEvent; onEdit: (event: CalendarEvent) => void }) {
-  const formatTime = (dateTime: string) => {
-    const date = new Date(dateTime)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  // const formatTime = (dateTime: string) => {
+  //   const date = new Date(dateTime)
+  //   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  // }
 
-  const formatDate = (dateTime: string) => {
-    const date = new Date(dateTime)
-    return date.toLocaleDateString([], { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    })
-  }
+  // const formatDate = (dateTime: string) => {
+  //   const date = new Date(dateTime)
+  //   return date.toLocaleDateString([], { 
+  //     weekday: 'short', 
+  //     month: 'short', 
+  //     day: 'numeric' 
+  //   })
+  // }
 
-  const getEventStatusColor = (event: CalendarEvent) => {
-    if (event.status === 'confirmed') return 'bg-green-500'
-    if (event.status === 'tentative') return 'bg-yellow-500'
-    if (event.status === 'cancelled') return 'bg-red-500'
-    return 'bg-blue-500'
-  }
+  // const getEventStatusColor = (event: CalendarEvent) => {
+  //   if (event.status === 'confirmed') return 'bg-green-500'
+  //   if (event.status === 'tentative') return 'bg-yellow-500'
+  //   if (event.status === 'cancelled') return 'bg-red-500'
+  //   return 'bg-blue-500'
+  // }
 
   const isAllDay = !event.start.dateTime
 
@@ -708,7 +708,7 @@ function EventCard({ event, onEdit }: { event: CalendarEvent; onEdit: (event: Ca
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center mb-2">
-            <div className={`w-3 h-3 rounded-full mr-3 ${getEventStatusColor(event)}`}></div>
+            <div className={`w-3 h-3 rounded-full mr-3 bg-blue-500`}></div>
             <h5 className="text-lg font-semibold text-gray-900 dark:text-white">
               {event.summary || 'No Title'}
             </h5>
@@ -716,10 +716,10 @@ function EventCard({ event, onEdit }: { event: CalendarEvent; onEdit: (event: Ca
           
           <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-2">
             <span className="mr-4">
-              📅 {formatDate(event.start.dateTime || event.start.date || '')}
+              📅 {new Date(event.start.dateTime || event.start.date || '').toLocaleDateString()}
             </span>
             <span>
-              ⏰ {isAllDay ? 'All Day' : formatTime(event.start.dateTime || '')}
+              ⏰ {isAllDay ? 'All Day' : new Date(event.start.dateTime || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
 

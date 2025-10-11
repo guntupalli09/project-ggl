@@ -1,14 +1,16 @@
 // Email reply tracking system
 // This would integrate with email services to track replies
 
-interface EmailTracking {
-  messageId: string
-  leadId: string
-  sentAt: string
-  hasReply: boolean
-  replyAt?: string
-  replyContent?: string
-}
+import { supabase } from './supabaseClient'
+
+// interface EmailTracking {
+//   messageId: string
+//   leadId: string
+//   sentAt: string
+//   hasReply: boolean
+//   replyAt?: string
+//   replyContent?: string
+// }
 
 // This would be called when sending emails
 export async function trackEmailSent(messageId: string, leadId: string) {

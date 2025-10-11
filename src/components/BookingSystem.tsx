@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 interface Booking {
@@ -22,7 +22,7 @@ export default function BookingSystem({ onBookingCreated }: BookingSystemProps) 
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [showBookingForm, setShowBookingForm] = useState(false)
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  // const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_email: '',

@@ -40,7 +40,7 @@ const LeadsBySourceChart: React.FC<LeadsBySourceChartProps> = ({ data }) => {
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
+              data={data as any}
               cx="50%"
               cy="50%"
               labelLine={false}
@@ -49,12 +49,12 @@ const LeadsBySourceChart: React.FC<LeadsBySourceChartProps> = ({ data }) => {
               fill="#8884d8"
               dataKey="count"
             >
-              {data.map((entry, index) => (
+              {data.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>
             <Tooltip 
-              formatter={(value: number, name: string) => [value, 'Leads']}
+              formatter={(value: number) => [value, 'Leads']}
               labelFormatter={(label: string) => `Source: ${label}`}
             />
             <Legend 

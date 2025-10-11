@@ -23,7 +23,7 @@ export interface LeadProcessingResult {
  */
 export async function processLeadAtomically(
   leadData: LeadCreationData,
-  businessSlug?: string
+  // businessSlug?: string
 ): Promise<LeadProcessingResult> {
   try {
     // Start a transaction-like process

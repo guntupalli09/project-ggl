@@ -10,7 +10,7 @@ interface GoogleCalendarIntegrationProps {
 interface GoogleCalendarStatus {
   connected: boolean
   email?: string
-  expiry?: string
+  expiry?: string | undefined
 }
 
 const GoogleCalendarIntegration: React.FC<GoogleCalendarIntegrationProps> = ({ 
@@ -51,7 +51,7 @@ const GoogleCalendarIntegration: React.FC<GoogleCalendarIntegrationProps> = ({
       setStatus({ 
         connected: authStatus.isAuthenticated, 
         email: authStatus.userInfo?.email,
-        expiry: null // Will be updated below
+        expiry: undefined // Will be updated below
       })
       
       if (onConnectionChange) {

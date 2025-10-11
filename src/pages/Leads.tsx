@@ -52,7 +52,7 @@ const Leads: React.FC = () => {
     }
   }
 
-  const handleEdit = (lead: Lead) => {
+  const handleEdit = (lead: any) => {
     setEditingLead(lead)
     setFormData({
       name: lead.name,
@@ -259,7 +259,6 @@ const Leads: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <ResponseTracker
                             leadId={lead.id}
-                            leadName={lead.name}
                             currentStatus={lead.status}
                             onStatusUpdate={() => {
                               // Refresh leads data
@@ -293,7 +292,10 @@ const Leads: React.FC = () => {
             leads && leads.length > 0 ? (
               <PipelineBoard 
                 contacts={leads} 
-                onContactUpdate={fetchLeads} 
+                onContactUpdate={async () => {
+                  // Refresh leads data
+                  window.location.reload()
+                }} 
                 onEditContact={handleEdit} 
                 onDeleteContact={handleDelete} 
               />

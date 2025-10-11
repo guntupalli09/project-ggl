@@ -158,7 +158,7 @@ export default function CRM() {
   }
 
   // Handle edit
-  const handleEdit = (contact: Contact) => {
+  const handleEdit = (contact: any) => {
     setEditingContact(contact)
     setFormData({
       name: contact.name,
@@ -532,7 +532,6 @@ export default function CRM() {
               onContactUpdate={fetchContacts}
               onEditContact={handleEdit}
               onDeleteContact={handleDelete}
-              onGenerateSequence={handleGenerateSequence}
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

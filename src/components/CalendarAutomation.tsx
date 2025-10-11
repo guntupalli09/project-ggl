@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 interface CalendarAutomationProps {
@@ -9,7 +9,7 @@ export default function CalendarAutomation({ onEventCreated }: CalendarAutomatio
   const [automations, setAutomations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null)
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  // const [showCreateModal, setShowCreateModal] = useState(false)
 
   useEffect(() => {
     loadAutomations()
@@ -166,7 +166,7 @@ export default function CalendarAutomation({ onEventCreated }: CalendarAutomatio
           Calendar Automation
         </h3>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => {/* TODO: Implement create modal */}}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           + Add Automation
@@ -184,7 +184,7 @@ export default function CalendarAutomation({ onEventCreated }: CalendarAutomatio
               Create automations to automatically schedule meetings and reminders
             </p>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {/* TODO: Implement create modal */}}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Create Your First Automation
