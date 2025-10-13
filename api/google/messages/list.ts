@@ -84,8 +84,8 @@ export default async function handler(req: any, res: any) {
       return res.status(401).json({ error: 'Authorization required' })
     }
 
-    // Get valid access token
-    const accessToken = await getValidAccessToken(userId)
+    // Get valid access token (for future use)
+    await getValidAccessToken(userId)
 
     // For now, return mock data since we need the actual brandId and agentId
     // In production, you'd need to get these from the user's business profile

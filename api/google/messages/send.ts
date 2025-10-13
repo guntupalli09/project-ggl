@@ -87,8 +87,8 @@ export default async function handler(req: any, res: any) {
       return res.status(401).json({ error: 'Invalid token' })
     }
 
-    // Get valid access token
-    const accessToken = await getValidAccessToken(user.id)
+    // Get valid access token (for future use)
+    await getValidAccessToken(user.id)
 
     // For now, return mock success since we need actual brandId and agentId
     // In production, you'd make the actual API call:

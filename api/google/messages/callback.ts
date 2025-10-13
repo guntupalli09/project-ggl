@@ -13,7 +13,7 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { code, state, error } = req.query
+  const { code, error } = req.query
 
   if (error) {
     return res.redirect(`/messages?error=${encodeURIComponent(error)}`)
@@ -62,8 +62,14 @@ export default async function handler(req: any, res: any) {
       return res.redirect('/messages?error=user_info_failed')
     }
 
-    // Find user by email
-    const { data: user, error: userError } = await supabase.auth.admin.getUserByEmail(userInfo.email)
+    // Find user by email - using a different approach since getUserByEmail doesn't exist
+    const { data: users, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', userInfo.email)
+      .single()
+    
+    const user = users
 
     if (userError || !user) {
       console.error('User not found:', userError)
