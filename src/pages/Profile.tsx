@@ -5,6 +5,7 @@ import { isGuestUser, getCurrentUser, clearGuestSession } from '../lib/authUtils
 import { useTheme } from '../hooks/useTheme'
 import { clearLinkedInSession } from '../lib/linkedinOAuth'
 import QRCodeGenerator from '../components/QRCodeGenerator'
+import GooglePlaceIdFinder from '../components/GooglePlaceIdFinder'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -19,7 +20,9 @@ import {
   MoonIcon,
   SparklesIcon,
   ShieldCheckIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  MapPinIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
 
 interface UserProfile {
@@ -47,8 +50,12 @@ export default function Profile() {
     business_slug: '',
     twilio_phone_number: '',
     business_phone: '',
-    missed_call_automation_enabled: false
+    missed_call_automation_enabled: false,
+    google_place_id: '',
+    business_address: '',
+    business_website: ''
   })
+  const [showPlaceIdFinder, setShowPlaceIdFinder] = useState(false)
   const navigate = useNavigate()
 
   // Handle URL parameters for Google Calendar integration
@@ -100,7 +107,10 @@ export default function Profile() {
           business_slug: settings.business_slug || '',
           twilio_phone_number: settings.twilio_phone_number || '',
           business_phone: settings.business_phone || '',
-          missed_call_automation_enabled: settings.missed_call_automation_enabled || false
+          missed_call_automation_enabled: settings.missed_call_automation_enabled || false,
+          google_place_id: settings.google_place_id || '',
+          business_address: settings.business_address || '',
+          business_website: settings.business_website || ''
         })
       }
 
@@ -140,7 +150,10 @@ export default function Profile() {
           business_slug: businessSlug,
           twilio_phone_number: formData.twilio_phone_number,
           business_phone: formData.business_phone,
-          missed_call_automation_enabled: formData.missed_call_automation_enabled
+          missed_call_automation_enabled: formData.missed_call_automation_enabled,
+          google_place_id: formData.google_place_id,
+          business_address: formData.business_address,
+          business_website: formData.business_website
         }, {
           onConflict: 'user_id'
         })
@@ -162,6 +175,18 @@ export default function Profile() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handlePlaceIdFound = (placeId: string, businessName: string, address: string) => {
+    setFormData(prev => ({
+      ...prev,
+      google_place_id: placeId,
+      business_name: businessName,
+      business_address: address
+    }))
+    setShowPlaceIdFinder(false)
+    setSuccess(`Google Place ID found: ${placeId}`)
+    setTimeout(() => setSuccess(''), 5000)
   }
 
   const handleLogout = async () => {
@@ -312,6 +337,50 @@ export default function Profile() {
                       placeholder="https://calendly.com/your-username"
                       helperText="Link to your booking calendar"
                     />
+                  </div>
+
+                  {/* Business Address */}
+                  <Input
+                    type="text"
+                    label="Business Address"
+                    value={formData.business_address}
+                    onChange={(e) => setFormData({ ...formData, business_address: e.target.value })}
+                    disabled={!editing}
+                    placeholder="123 Main St, City, State 12345"
+                  />
+
+                  {/* Business Website */}
+                  <Input
+                    type="url"
+                    label="Business Website"
+                    value={formData.business_website}
+                    onChange={(e) => setFormData({ ...formData, business_website: e.target.value })}
+                    disabled={!editing}
+                    placeholder="https://yourbusiness.com"
+                  />
+
+                  {/* Google Place ID */}
+                  <div className="md:col-span-2">
+                    <Input
+                      type="text"
+                      label="Google Place ID"
+                      value={formData.google_place_id}
+                      onChange={(e) => setFormData({ ...formData, google_place_id: e.target.value })}
+                      disabled={!editing}
+                      placeholder="ChIJN1t_tDeuEmsRUsoyG83frY4"
+                      helperText="Find your Place ID to enable Google Reviews integration"
+                    />
+                    {editing && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowPlaceIdFinder(true)}
+                        className="mt-2"
+                        leftIcon={<MapPinIcon className="h-4 w-4" />}
+                      >
+                        Find My Place ID
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -563,6 +632,31 @@ export default function Profile() {
           businessName={formData.business_name || 'Your Business'}
           onClose={() => setShowQRCode(false)} 
         />
+      )}
+
+      {/* Google Place ID Finder Modal */}
+      {showPlaceIdFinder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Find Your Google Place ID
+                </h3>
+                <button
+                  onClick={() => setShowPlaceIdFinder(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              <GooglePlaceIdFinder
+                onPlaceIdFound={handlePlaceIdFound}
+                currentPlaceId={formData.google_place_id}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
