@@ -92,14 +92,14 @@ export class GoogleCalendarAuth {
       if (environment.isProduction) {
         // Use backend API in production
         console.log('Using backend API for token exchange in production')
-        tokenResponse = await fetch('/api/google/exchange-token', {
+        tokenResponse = await fetch('/api/google/tokens', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             code: code,
-            redirect_uri: this.config.redirectUri
+            action: 'exchange'
           })
         })
       } else {
@@ -289,13 +289,14 @@ export class GoogleCalendarAuth {
       if (environment.isProduction) {
         // Use backend API in production
         console.log('Using backend API for token refresh in production')
-        response = await fetch('/api/google/refresh-token', {
+        response = await fetch('/api/google/tokens', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            refresh_token: refreshToken
+            refresh_token: refreshToken,
+            action: 'refresh'
           })
         })
       } else {
