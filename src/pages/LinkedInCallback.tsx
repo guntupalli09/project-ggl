@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { exchangeLinkedInCode, storeLinkedInSession } from '../lib/linkedinOAuth'
+import { supabase } from '../lib/supabaseClient'
 
 export default function LinkedInCallback() {
   const [searchParams] = useSearchParams()
@@ -40,12 +41,52 @@ export default function LinkedInCallback() {
           userProfile
         )
 
+        // Save LinkedIn account to database with profile info
+        try {
+          const { data: { user: currentUser } } = await supabase.auth.getUser()
+          if (currentUser) {
+            // First, try to delete any existing LinkedIn account for this user
+            await supabase
+              .from('social_accounts')
+              .delete()
+              .eq('user_id', currentUser.id)
+              .eq('platform', 'linkedin')
+
+            // Then insert the new account
+            const { error } = await supabase
+              .from('social_accounts')
+              .insert({
+                user_id: currentUser.id,
+                platform: 'linkedin',
+                access_token: result.access_token,
+                platform_user_id: userProfile.id,
+                platform_username: `${userProfile.firstName} ${userProfile.lastName}`,
+                profile_picture_url: userProfile.profilePicture || null,
+                expires_at: result.expires_at
+              })
+
+            if (error) {
+              console.error('❌ Error saving LinkedIn account to database:', error)
+              console.error('❌ Error details:', JSON.stringify(error, null, 2))
+            } else {
+              console.log('✅ LinkedIn account saved to database successfully!')
+              console.log('📊 Profile saved:', {
+                name: `${userProfile.firstName} ${userProfile.lastName}`,
+                id: userProfile.id,
+                picture: userProfile.profilePicture
+              })
+            }
+          }
+        } catch (dbError) {
+          console.error('❌ Database error:', dbError)
+        }
+
         setStatus('success')
         setMessage(`Successfully connected to LinkedIn as ${userProfile.firstName} ${userProfile.lastName}! Redirecting...`)
         
-        // Redirect to dashboard after 2 seconds
+        // Redirect to social automation page after 2 seconds
         setTimeout(() => {
-          navigate('/dashboard')
+          navigate('/social-automation')
         }, 2000)
 
       } catch (error: any) {
@@ -59,9 +100,9 @@ export default function LinkedInCallback() {
           setMessage(error.message || 'Failed to connect to LinkedIn')
         }
         
-        // Redirect to dashboard after 3 seconds
+        // Redirect to social automation page after 3 seconds
         setTimeout(() => {
-          navigate('/dashboard')
+          navigate('/social-automation')
         }, 3000)
       }
     }

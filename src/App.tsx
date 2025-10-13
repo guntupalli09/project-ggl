@@ -16,6 +16,8 @@ import Leads from './pages/Leads'
 import Automations from './pages/Automations'
 import PublicLeadCapture from './pages/PublicLeadCapture'
 import Calendar from './pages/Calendar'
+import Messages from './pages/Messages'
+import BusinessPerformance from './pages/BusinessPerformance'
 
 function App() {
   const { theme } = useTheme()
@@ -50,7 +52,9 @@ function App() {
                       <Route path="/social-automation" element={<SocialAutomation />} />
                       <Route path="/automations" element={<Automations />} />
                       <Route path="/profile" element={<Profile />} />
-            <Route path="/calendar" element={<Calendar />} />
+                      <Route path="/calendar" element={<Calendar />} />
+                      <Route path="/messages" element={<Messages />} />
+            <Route path="/business-performance" element={<BusinessPerformance />} />
                       <Route path="/daily-growth" element={<DailyGrowth />} />
                       <Route path="/brand-voice" element={<BrandVoice />} />
                     </Routes>

@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Alert } from '../components/ui/Alert'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -61,7 +65,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         {/* Brand Header */}
         <div className="text-center">
@@ -71,14 +75,14 @@ export default function Login() {
                 src="/logo.svg" 
                 alt="GGL Logo" 
                 className="w-10 h-10"
-                  onError={(e) => {
-                    // Fallback to a simple icon if logo doesn't load
-                    e.currentTarget.style.display = 'none'
-                    const nextElement = e.currentTarget.nextElementSibling as HTMLElement
-                    if (nextElement) {
-                      nextElement.style.display = 'block'
-                    }
-                  }}
+                onError={(e) => {
+                  // Fallback to a simple icon if logo doesn't load
+                  e.currentTarget.style.display = 'none'
+                  const nextElement = e.currentTarget.nextElementSibling as HTMLElement
+                  if (nextElement) {
+                    nextElement.style.display = 'block'
+                  }
+                }}
               />
               <svg 
                 className="w-10 h-10 text-white hidden" 
@@ -96,82 +100,66 @@ export default function Login() {
           </div>
         </div>
 
-            <div>
-              <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-                Sign in to your account
-              </h2>
-            </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Sign in to your account</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              <Input
                 type="email"
-                autoComplete="email"
-                required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                label="Email address"
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
                 required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                autoComplete="email"
+              />
+              
+              <Input
+                type="password"
+                label="Password"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
               />
-            </div>
-          </div>
 
-          {error && (
-            <div className="text-red-600 text-sm text-center">
-              {error}
-            </div>
-          )}
+              {error && (
+                <Alert variant="error">
+                  {error}
+                </Alert>
+              )}
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading || guestLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </div>
+              <Button
+                type="submit"
+                className="w-full"
+                loading={loading}
+                disabled={guestLoading}
+              >
+                {loading ? 'Signing in...' : 'Sign in'}
+              </Button>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-100 text-gray-500">Or</span>
-            </div>
-          </div>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500">Or</span>
+                </div>
+              </div>
 
-          <div>
-            <button
-              type="button"
-              onClick={handleGuestLogin}
-              disabled={loading || guestLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {guestLoading ? 'Starting guest session...' : 'Continue as Guest'}
-            </button>
-          </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleGuestLogin}
+                loading={guestLoading}
+                disabled={loading}
+              >
+                {guestLoading ? 'Starting guest session...' : 'Continue as Guest'}
+              </Button>
 
               <div className="text-center">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -184,7 +172,9 @@ export default function Login() {
                   </a>
                 </p>
               </div>
-        </form>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

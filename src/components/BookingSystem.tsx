@@ -16,9 +16,10 @@ interface Booking {
 
 interface BookingSystemProps {
   onBookingCreated?: (booking: Booking) => void
+  onBookingSaved?: () => void
 }
 
-export default function BookingSystem({ onBookingCreated }: BookingSystemProps) {
+export default function BookingSystem({ onBookingCreated, onBookingSaved }: BookingSystemProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [showBookingForm, setShowBookingForm] = useState(false)
@@ -98,6 +99,7 @@ export default function BookingSystem({ onBookingCreated }: BookingSystemProps) 
 
       setBookings(prev => [...prev, data])
       onBookingCreated?.(data)
+      onBookingSaved?.()
       setShowBookingForm(false)
       resetForm()
 

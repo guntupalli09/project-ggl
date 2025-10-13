@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-// import { supabase } from '../lib/supabaseClient'
-// import { getCurrentUser } from '../lib/authUtils'
+import { supabase } from '../lib/supabaseClient'
+import { getCurrentUser } from '../lib/authUtils'
 import SocialAccountManager from '../components/SocialAccountManager'
 import AISocialPostGenerator from '../components/AISocialPostGenerator'
 
@@ -62,6 +62,65 @@ export default function SocialAutomation() {
   const [connectedAccounts] = useState<any[]>([])
   const [scheduledPosts] = useState<any[]>([])
   const [publishedPosts] = useState<any[]>([])
+
+  // Handle LinkedIn OAuth callback
+  useEffect(() => {
+    const handleLinkedInCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search)
+      const linkedinSuccess = urlParams.get('linkedin_success')
+      const linkedinError = urlParams.get('linkedin_error')
+      const profile = urlParams.get('profile')
+      const token = urlParams.get('token')
+
+      if (linkedinSuccess && profile && token) {
+        try {
+          const currentUser = await getCurrentUser()
+          if (!currentUser) {
+            console.error('No user found for LinkedIn connection')
+            return
+          }
+
+          const profileData = JSON.parse(decodeURIComponent(profile))
+          
+          console.log('🔍 LinkedIn Profile Data:', profileData)
+          
+          // Save LinkedIn account to database with profile info
+          const { error } = await supabase
+            .from('social_accounts')
+            .upsert({
+              user_id: currentUser.id,
+              platform: 'linkedin',
+              access_token: token,
+              platform_user_id: profileData.id,
+              platform_username: `${profileData.firstName} ${profileData.lastName}`,
+              profile_picture_url: profileData.profilePictureUrl || null,
+              expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() // 60 days from now
+            }, {
+              onConflict: 'user_id,platform'
+            })
+
+          if (error) {
+            console.error('❌ Error saving LinkedIn account:', error)
+          } else {
+            console.log('✅ LinkedIn account connected successfully!')
+            console.log('📊 Profile saved:', {
+              name: `${profileData.firstName} ${profileData.lastName}`,
+              id: profileData.id,
+              picture: profileData.profilePictureUrl
+            })
+            // Refresh the page to show updated connection status
+            window.location.href = '/social-automation'
+          }
+        } catch (error) {
+          console.error('Error handling LinkedIn callback:', error)
+        }
+      } else if (linkedinError) {
+        console.error('LinkedIn OAuth error occurred')
+      }
+    }
+
+    handleLinkedInCallback()
+  }, [])
 
   // Load user data and stats
   useEffect(() => {

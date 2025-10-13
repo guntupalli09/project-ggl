@@ -3,6 +3,16 @@ import { useLeads, Lead } from '../hooks/useLeads'
 import AIMessageGenerator from '../components/AIMessageGenerator'
 import PipelineBoard from '../components/PipelineBoard'
 import ResponseTracker from '../components/ResponseTracker'
+import BookingIntegration from '../components/BookingIntegration'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+import { Select } from '../components/ui/Select'
+import { Modal } from '../components/ui/Modal'
+import { Alert } from '../components/ui/Alert'
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { 
   PlusIcon, 
   PencilIcon, 
@@ -103,84 +113,69 @@ const Leads: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Leads Management
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Track and manage your leads throughout the sales process
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Header */}
+        <PageHeader
+          title="Leads Management"
+          subtitle="Track and manage your leads throughout the sales process"
+          actions={
+            <Button
+              onClick={() => setShowAddForm(true)}
+              leftIcon={<PlusIcon className="h-4 w-4" />}
+            >
+              Add Lead
+            </Button>
+          }
+        />
 
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-            <p className="text-red-800 dark:text-red-200">{error}</p>
-          </div>
+          <Alert variant="error" className="mb-6">
+            {error}
+          </Alert>
         )}
 
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              All Leads ({leads.length})
-            </h2>
-            <div className="flex items-center space-x-4">
-              {/* View Toggle */}
-              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'table'
-                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <TableCellsIcon className="h-4 w-4 mr-1" />
-                  Table
-                </button>
-                <button
-                  onClick={() => setViewMode('pipeline')}
-                  className={`flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'pipeline'
-                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Squares2X2Icon className="h-4 w-4 mr-1" />
-                  Pipeline
-                </button>
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>All Leads ({leads.length})</CardTitle>
+              <div className="flex items-center space-x-4">
+                {/* View Toggle */}
+                <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'table' | 'pipeline')} defaultValue="table">
+                  <TabsList variant="pills">
+                    <TabsTrigger value="table" className="flex items-center">
+                      <TableCellsIcon className="h-4 w-4 mr-1" />
+                      Table
+                    </TabsTrigger>
+                    <TabsTrigger value="pipeline" className="flex items-center">
+                      <Squares2X2Icon className="h-4 w-4 mr-1" />
+                      Pipeline
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
-              
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors duration-200"
-              >
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Add Lead
-              </button>
             </div>
-          </div>
+          </CardHeader>
+          <CardContent>
 
-          {leads.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="text-gray-400 dark:text-gray-500 mb-4">
-                <EnvelopeIcon className="h-12 w-12 mx-auto" />
+            {leads.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="text-gray-400 dark:text-gray-500 mb-4">
+                  <EnvelopeIcon className="h-12 w-12 mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  No leads yet
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Get started by adding your first lead
+                </p>
+                <Button
+                  onClick={() => setShowAddForm(true)}
+                  leftIcon={<PlusIcon className="h-4 w-4" />}
+                >
+                  Add Your First Lead
+                </Button>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No leads yet
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Get started by adding your first lead
-              </p>
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors duration-200"
-              >
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Add Your First Lead
-              </button>
-            </div>
           ) : viewMode === 'table' ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -268,6 +263,15 @@ const Leads: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex justify-end space-x-2">
+                            <BookingIntegration
+                              leadId={lead.id}
+                              leadName={lead.name}
+                              leadEmail={lead.email}
+                              onBookingCreated={() => {
+                                // Refresh leads when booking is created
+                                window.location.reload()
+                              }}
+                            />
                             <button
                               onClick={() => handleEdit(lead)}
                               className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -305,140 +309,108 @@ const Leads: React.FC = () => {
               </div>
             )
           )}
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Add/Edit Lead Modal */}
-        {showAddForm && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
-              <div className="mt-3">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  {editingLead ? 'Edit Lead' : 'Add New Lead'}
-                </h3>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Phone
-                    </label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Source
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.source}
-                      onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                      placeholder="e.g., Website, Referral, Social Media"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as Lead['status'] })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="new">New</option>
-                      <option value="contacted">Contacted</option>
-                      <option value="booked">Booked</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Notes
-                    </label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAddForm(false)
-                        setEditingLead(null)
-                        setFormData({ name: '', email: '', phone: '', source: '', status: 'new', notes: '' })
-                      }}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-md transition-colors duration-200"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors duration-200"
-                    >
-                      {editingLead ? 'Update Lead' : 'Add Lead'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+        <Modal
+          isOpen={showAddForm}
+          onClose={() => {
+            setShowAddForm(false)
+            setEditingLead(null)
+            setFormData({ name: '', email: '', phone: '', source: '', status: 'new', notes: '' })
+          }}
+          title={editingLead ? 'Edit Lead' : 'Add New Lead'}
+          size="md"
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              type="text"
+              label="Name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+            />
+            
+            <Input
+              type="email"
+              label="Email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+            />
+            
+            <Input
+              type="tel"
+              label="Phone"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            />
+            
+            <Input
+              type="text"
+              label="Source"
+              value={formData.source}
+              onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+              placeholder="e.g., Website, Referral, Social Media"
+            />
+            
+            <Select
+              label="Status"
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as Lead['status'] })}
+              options={[
+                { value: 'new', label: 'New' },
+                { value: 'contacted', label: 'Contacted' },
+                { value: 'booked', label: 'Booked' },
+                { value: 'completed', label: 'Completed' }
+              ]}
+            />
+            
+            <Textarea
+              label="Notes"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+            />
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowAddForm(false)
+                  setEditingLead(null)
+                  setFormData({ name: '', email: '', phone: '', source: '', status: 'new', notes: '' })
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                {editingLead ? 'Update Lead' : 'Add Lead'}
+              </Button>
             </div>
-          </div>
-        )}
-      </div>
+          </form>
+        </Modal>
 
-      {/* AI Message Generator Section */}
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-          AI Message Generator
-        </h2>
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Generate AI-powered follow-up messages for your leads. Add a lead with an email address above to see the "Send Email" button.
-          </p>
-          
-          {/* Demo with sample data */}
-          <AIMessageGenerator 
-            leadName="John Doe"
-            leadCompany="Acme Corp"
-            leadEmail="john@acme.com"
-            leadId="demo-lead-id"
-            onMessageGenerated={(message) => console.log('Generated message:', message)}
+        {/* AI Message Generator Section */}
+        <div className="mt-8">
+          <PageHeader
+            title="AI Message Generator"
+            subtitle="Generate AI-powered follow-up messages for your leads. Add a lead with an email address above to see the 'Send Email' button."
           />
+          <Card>
+            <CardContent>
+              {/* Demo with sample data */}
+              <AIMessageGenerator 
+                leadName="John Doe"
+                leadCompany="Acme Corp"
+                leadEmail="john@acme.com"
+                leadId="demo-lead-id"
+                onMessageGenerated={(message) => console.log('Generated message:', message)}
+              />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

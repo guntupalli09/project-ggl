@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { googleCalendarAuth } from '../lib/googleCalendarAuth'
 import EventModal from './EventModal'
 
 interface CalendarEvent {
@@ -62,15 +63,10 @@ export default function BusinessCalendarView({ onError, events: propEvents, onEv
         return
       }
 
-      // Get user's Google Calendar tokens
-      const { data: settings, error: settingsError } = await supabase
-        .from('user_settings')
-        .select('google_access_token, google_calendar_email')
-        .eq('user_id', user.id)
-        .single()
-
-      if (settingsError || !settings?.google_access_token) {
-        setError('Google Calendar not connected')
+      // Get a valid access token (will refresh if needed)
+      const accessToken = await googleCalendarAuth.getValidAccessToken()
+      if (!accessToken) {
+        setError('Google Calendar not connected or token expired')
         return
       }
 
@@ -83,7 +79,7 @@ export default function BusinessCalendarView({ onError, events: propEvents, onEv
         `timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=100`,
         {
           headers: {
-            'Authorization': `Bearer ${settings.google_access_token}`
+            'Authorization': `Bearer ${accessToken}`
           }
         }
       )

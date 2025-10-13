@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Business Profile - Callback</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .error {
+            color: #ef4444;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loading">
+            <div class="spinner"></div>
+            <h2>Connecting to Google Business Profile...</h2>
+            <p>Please wait while we process your authentication.</p>
+        </div>
+        <div id="success" style="display: none;">
+            <h2 class="success">✅ Successfully Connected!</h2>
+            <p>Your Google Business Profile has been connected successfully.</p>
+            <p>You can now manage your business messages directly from the app.</p>
+            <button onclick="redirectToMessages()" style="
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 1rem;
+            ">Go to Messages</button>
+        </div>
+        <div id="error" style="display: none;">
+            <h2 class="error">❌ Connection Failed</h2>
+            <p id="errorMessage">There was an error connecting to Google Business Profile.</p>
+            <button onclick="retryConnection()" style="
+                background: #ef4444;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 1rem;
+            ">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const error = urlParams.get('error');
+        const state = urlParams.get('state');
+
+        async function handleCallback() {
+            if (error) {
+                showError(`OAuth Error: ${error}`);
+                return;
+            }
+
+            if (!code) {
+                showError('No authorization code received');
+                return;
+            }
+
+            try {
+                // Exchange code for tokens via our API server
+                const response = await fetch('http://localhost:3001/api/google/messages/callback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        state: state
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showSuccess();
+                } else {
+                    const errorData = await response.json();
+                    showError(errorData.error || 'Failed to exchange authorization code');
+                }
+            } catch (err) {
+                console.error('Callback error:', err);
+                showError('Network error: ' + err.message);
+            }
+        }
+
+        function showSuccess() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('success').style.display = 'block';
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        function redirectToMessages() {
+            window.location.href = '/messages';
+        }
+
+        function retryConnection() {
+            window.location.href = 'http://localhost:3001/api/google/messages/auth';
+        }
+
+        // Handle the callback when page loads
+        window.addEventListener('load', handleCallback);
+    </script>
+</body>
+</html>

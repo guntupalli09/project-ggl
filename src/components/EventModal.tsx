@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { googleCalendarAuth } from '../lib/googleCalendarAuth'
 
 interface CalendarEvent {
   id?: string
@@ -133,21 +134,17 @@ export default function EventModal({
     }
 
     try {
-      // Get user's Google Calendar tokens
+      // Get user authentication
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setError('User not authenticated')
         return
       }
 
-      const { data: settings } = await supabase
-        .from('user_settings')
-        .select('google_access_token')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!settings?.google_access_token) {
-        setError('Google Calendar not connected')
+      // Get a valid access token (will refresh if needed)
+      const accessToken = await googleCalendarAuth.getValidAccessToken()
+      if (!accessToken) {
+        setError('Google Calendar not connected or token expired')
         return
       }
 
@@ -217,7 +214,7 @@ export default function EventModal({
           {
             method: 'PUT',
             headers: {
-              'Authorization': `Bearer ${settings.google_access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(eventData)
@@ -230,7 +227,7 @@ export default function EventModal({
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${settings.google_access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(eventData)
@@ -270,14 +267,10 @@ export default function EventModal({
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: settings } = await supabase
-        .from('user_settings')
-        .select('google_access_token')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!settings?.google_access_token) {
-        setError('Google Calendar not connected')
+      // Get a valid access token (will refresh if needed)
+      const accessToken = await googleCalendarAuth.getValidAccessToken()
+      if (!accessToken) {
+        setError('Google Calendar not connected or token expired')
         return
       }
 
@@ -286,7 +279,7 @@ export default function EventModal({
         {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${settings.google_access_token}`
+            'Authorization': `Bearer ${accessToken}`
           }
         }
       )

@@ -23,6 +23,7 @@ const getBackendUrl = () => {
   return 'http://localhost:3001/api'
 }
 
+
 // Generate LinkedIn OAuth URL
 export const getLinkedInAuthUrl = async (): Promise<string> => {
   try {
@@ -52,12 +53,12 @@ export const getLinkedInAuthUrl = async (): Promise<string> => {
 export const exchangeLinkedInCode = async (code: string, state: string): Promise<LinkedInTokens & { profile: LinkedInProfile }> => {
   try {
     const backendUrl = getBackendUrl()
-    const response = await fetch(`${backendUrl}/linkedin/callback`, {
+    const response = await fetch(`${backendUrl}/linkedin/exchange`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include',
+      credentials: 'include', // This ensures cookies are sent
       body: JSON.stringify({ code, state })
     })
     

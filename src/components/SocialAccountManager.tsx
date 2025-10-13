@@ -139,6 +139,22 @@ export default function SocialAccountManager({ onAccountUpdate }: SocialAccountM
       )
 
       setAccounts(accountsWithRefreshedTokens)
+      
+      // Load LinkedIn profile data from database if LinkedIn is connected
+      const linkedinAccount = accountsWithRefreshedTokens.find(acc => acc.platform === 'linkedin')
+      if (linkedinAccount && linkedinAccount.platform_username && linkedinAccount.platform_user_id) {
+        setLinkedinProfile({
+          id: linkedinAccount.platform_user_id,
+          firstName: linkedinAccount.platform_username.split(' ')[0] || 'LinkedIn',
+          lastName: linkedinAccount.platform_username.split(' ').slice(1).join(' ') || 'User',
+          profilePictureUrl: linkedinAccount.profile_picture_url
+        })
+        console.log('📊 Loaded LinkedIn profile from database:', {
+          name: linkedinAccount.platform_username,
+          id: linkedinAccount.platform_user_id,
+          picture: linkedinAccount.profile_picture_url
+        })
+      }
     } catch (error) {
       console.error('Error loading accounts:', error)
     }
@@ -199,8 +215,23 @@ export default function SocialAccountManager({ onAccountUpdate }: SocialAccountM
   }
 
   // Disconnect LinkedIn (localStorage-based)
-  const handleDisconnectLinkedIn = () => {
+  const handleDisconnectLinkedIn = async () => {
     try {
+      // Remove from database first
+      if (user) {
+        const { error: deleteError } = await supabase
+          .from('social_accounts')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('platform', 'linkedin')
+        
+        if (deleteError) {
+          console.error('Error deleting LinkedIn account from database:', deleteError)
+        } else {
+          console.log('✅ LinkedIn account removed from database')
+        }
+      }
+      
       // Use the centralized clearLinkedInSession function
       clearLinkedInSession()
       
@@ -290,15 +321,43 @@ export default function SocialAccountManager({ onAccountUpdate }: SocialAccountM
               className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
             >
               <div className="flex items-center">
-                <span className="text-2xl mr-3">{config.icon}</span>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                    {config.name}
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {connected ? 'Connected' : 'Not connected'}
-                  </p>
-                </div>
+                {platform === 'linkedin' && connected && linkedinProfile ? (
+                  <>
+                    {linkedinProfile.profilePictureUrl ? (
+                      <img
+                        src={linkedinProfile.profilePictureUrl}
+                        alt={`${linkedinProfile.firstName} ${linkedinProfile.lastName}`}
+                        className="w-8 h-8 rounded-full mr-3 object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/20 rounded-full mr-3 flex items-center justify-center">
+                        <span className="text-blue-600 dark:text-blue-400 text-sm font-semibold">
+                          {linkedinProfile.firstName?.[0]}{linkedinProfile.lastName?.[0]}
+                        </span>
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                        {linkedinProfile.firstName} {linkedinProfile.lastName}
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Connected to LinkedIn
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-2xl mr-3">{config.icon}</span>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                        {config.name}
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {connected ? 'Connected' : 'Not connected'}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">

@@ -19,6 +19,7 @@ export default function Calendar() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('calendar')
   const [events, setEvents] = useState([])
+  const [bookings, setBookings] = useState<any[]>([])
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -29,7 +30,30 @@ export default function Calendar() {
     if (googleCalendarConnected) {
       fetchCalendarEvents()
     }
+    fetchBookings()
   }, [googleCalendarConnected])
+
+  const fetchBookings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: bookingsData, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('booking_time', { ascending: true })
+
+      if (error) {
+        console.error('Error fetching bookings:', error)
+        return
+      }
+
+      setBookings(bookingsData || [])
+    } catch (error) {
+      console.error('Error fetching bookings:', error)
+    }
+  }
 
   const fetchCalendarEvents = async () => {
     try {
@@ -115,6 +139,36 @@ export default function Calendar() {
     // Refresh events when an event is deleted
     fetchCalendarEvents()
   }
+
+  const handleBookingSaved = () => {
+    fetchBookings()
+  }
+
+  // Convert bookings to calendar events format
+  const convertBookingsToEvents = (bookings: any[]) => {
+    return bookings.map(booking => ({
+      id: `booking-${booking.id}`,
+      summary: `${booking.service} - ${booking.customer_name}`,
+      description: `Customer: ${booking.customer_name}\nEmail: ${booking.customer_email}\nNotes: ${booking.notes || 'No notes'}`,
+      start: {
+        dateTime: booking.booking_time,
+        timeZone: 'UTC'
+      },
+      end: {
+        dateTime: new Date(new Date(booking.booking_time).getTime() + (booking.duration_minutes * 60000)).toISOString(),
+        timeZone: 'UTC'
+      },
+      location: 'Business Location',
+      status: 'confirmed',
+      source: 'booking'
+    }))
+  }
+
+  // Combine Google Calendar events with bookings
+  const combinedEvents = [
+    ...events,
+    ...convertBookingsToEvents(bookings)
+  ]
 
   const checkGoogleCalendarStatus = async () => {
     try {
@@ -218,7 +272,7 @@ export default function Calendar() {
               </div>
               {googleCalendarConnected ? (
                 <BusinessCalendarView 
-                  events={events} 
+                  events={combinedEvents} 
                   onEventSaved={handleEventSaved}
                   onEventDeleted={handleEventDeleted}
                 />
@@ -250,7 +304,7 @@ export default function Calendar() {
                   New Booking
                 </button>
               </div>
-              <BookingSystem />
+              <BookingSystem onBookingSaved={handleBookingSaved} />
             </div>
           )}
 
@@ -277,7 +331,7 @@ export default function Calendar() {
                 </h2>
                 <div className="flex items-center space-x-3">
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {events.length} events loaded
+                    {combinedEvents.length} events loaded ({events.length} Google Calendar + {bookings.length} bookings)
                     {lastUpdated && (
                       <span className="ml-2">
                         • Last updated: {lastUpdated.toLocaleTimeString()}
@@ -300,7 +354,7 @@ export default function Calendar() {
                   </button>
                 </div>
               </div>
-              <CalendarAnalytics events={events} />
+              <CalendarAnalytics events={combinedEvents} />
             </div>
           )}
         </div>

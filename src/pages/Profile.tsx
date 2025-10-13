@@ -5,8 +5,22 @@ import { isGuestUser, getCurrentUser, clearGuestSession } from '../lib/authUtils
 import { useTheme } from '../hooks/useTheme'
 import { clearLinkedInSession } from '../lib/linkedinOAuth'
 import QRCodeGenerator from '../components/QRCodeGenerator'
-import GoogleCalendarIntegration from '../components/GoogleCalendarIntegration'
-import BusinessCalendarView from '../components/BusinessCalendarView'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Alert } from '../components/ui/Alert'
+import { 
+  UserIcon, 
+  PhoneIcon, 
+  CogIcon,
+  QrCodeIcon,
+  SunIcon,
+  MoonIcon,
+  SparklesIcon,
+  ShieldCheckIcon,
+  ExclamationTriangleIcon
+} from '@heroicons/react/24/outline'
 
 interface UserProfile {
   id: string
@@ -26,11 +40,9 @@ export default function Profile() {
   const [success, setSuccess] = useState('')
   const [editing, setEditing] = useState(false)
   const [showQRCode, setShowQRCode] = useState(false)
-  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false)
   const { toggleTheme, isDark } = useTheme()
   const [formData, setFormData] = useState({
-    name: '',
-    company: '',
+    business_name: '',
     booking_link: '',
     business_slug: '',
     twilio_phone_number: '',
@@ -56,233 +68,96 @@ export default function Profile() {
     }
   }, [])
 
-  // Load user profile
   useEffect(() => {
-    const loadUserProfile = async () => {
-      try {
-        setLoading(true)
-        const currentUser = await getCurrentUser()
-        
-        if (!currentUser) {
-          navigate('/login')
-          return
-        }
-
-        // Check if user is guest
-        const isGuest = isGuestUser()
-        
-        if (isGuest) {
-          const guestUser = {
-            id: currentUser.id,
-            email: currentUser.email || 'guest@example.com',
-            name: 'Guest User',
-            company: 'Demo Company',
-            plan_type: 'free' as const,
-            created_at: new Date().toISOString(),
-            is_guest: true
-          }
-          setUser(guestUser)
-          setFormData(prev => ({
-            ...prev,
-            name: guestUser.name,
-            company: guestUser.company,
-            booking_link: ''
-          }))
-        } else {
-          // Get user profile from Supabase
-          const { data: profile, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .single()
-
-          // Get user settings (including all fields)
-          const { data: settings, error: settingsError } = await supabase
-            .from('user_settings')
-            .select('booking_link, business_slug, twilio_phone_number, business_phone, missed_call_automation_enabled')
-            .eq('user_id', currentUser.id)
-            .single()
-
-          if (error && error.code !== 'PGRST116') {
-            console.error('Error loading profile:', error)
-          }
-
-          if (settingsError && settingsError.code !== 'PGRST116') {
-            console.error('Error loading settings:', settingsError)
-          }
-
-          const userProfile = {
-            id: currentUser.id,
-            email: currentUser.email || '',
-            name: profile?.name || '',
-            company: profile?.company || '',
-            plan_type: (profile?.plan_type || 'free') as 'free' | 'premium',
-            created_at: currentUser.created_at || new Date().toISOString(),
-            is_guest: false
-          }
-          setUser(userProfile)
-          // Generate a business slug if none exists
-          let businessSlug = settings?.business_slug
-          console.log('Current business slug:', businessSlug)
-          if (!businessSlug) {
-            // Generate slug from company name or email
-            const companyName = userProfile.company || userProfile.email?.split('@')[0] || 'business'
-            businessSlug = companyName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-            console.log('Generated business slug:', businessSlug)
-            
-            // Save the generated slug
-            const { error: slugError } = await supabase
-              .from('user_settings')
-              .update({ business_slug: businessSlug })
-              .eq('user_id', currentUser.id)
-            
-            if (slugError) {
-              console.error('Error saving business slug:', slugError)
-            }
-          }
-          
-          setFormData({
-            name: userProfile.name,
-            company: userProfile.company,
-            booking_link: settings?.booking_link || '',
-            business_slug: businessSlug,
-            twilio_phone_number: settings?.twilio_phone_number || '',
-            business_phone: settings?.business_phone || '',
-            missed_call_automation_enabled: settings?.missed_call_automation_enabled || false
-          })
-        }
-
-        // Theme is now managed by useTheme hook
-      } catch (err) {
-        console.error('Error loading profile:', err)
-        setError('Failed to load profile')
-      } finally {
-        setLoading(false)
-      }
-    }
-
     loadUserProfile()
-    checkGoogleCalendarStatus()
-  }, [navigate])
+  }, [])
 
-  const checkGoogleCalendarStatus = async () => {
+  const loadUserProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      setLoading(true)
+      const currentUser = await getCurrentUser()
+      
+      if (!currentUser) {
+        navigate('/login')
+        return
+      }
 
-      const { data: settings } = await supabase
+      setUser(currentUser)
+
+      // Load user settings
+      const { data: settings, error: settingsError } = await supabase
         .from('user_settings')
-        .select('google_calendar_connected, google_access_token')
-        .eq('user_id', user.id)
+        .select('*')
+        .eq('user_id', currentUser.id)
         .single()
 
-      if (settings?.google_calendar_connected && settings?.google_access_token) {
-        setGoogleCalendarConnected(true)
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        console.error('Error loading settings:', settingsError)
+      } else if (settings) {
+        setFormData({
+          business_name: settings.business_name || currentUser.company || '',
+          booking_link: settings.booking_link || '',
+          business_slug: settings.business_slug || '',
+          twilio_phone_number: settings.twilio_phone_number || '',
+          business_phone: settings.business_phone || '',
+          missed_call_automation_enabled: settings.missed_call_automation_enabled || false
+        })
       }
-    } catch (err) {
-      console.error('Error checking Google Calendar status:', err)
+
+      // Profile settings loaded successfully
+    } catch (error) {
+      console.error('Error loading profile:', error)
+      setError('Failed to load profile')
+    } finally {
+      setLoading(false)
     }
-  }
-
-  // Theme is now managed by useTheme hook
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
   }
 
   const handleSave = async () => {
-    if (!user || user.is_guest) {
-      setError('Cannot save profile in guest mode')
-      return
-    }
+    if (!user) return
 
     setSaving(true)
     setError('')
     setSuccess('')
 
     try {
-      // Save profile data
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert([{
+      // Auto-generate business_slug if not set
+      let businessSlug = formData.business_slug
+      if (!businessSlug) {
+        if (formData.business_name) {
+          businessSlug = formData.business_name.toLowerCase().replace(/[^a-z0-9]/g, '')
+        } else if (user.email) {
+          businessSlug = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')
+        }
+      }
+
+      const { error: settingsError } = await supabase
+        .from('user_settings')
+        .upsert({
           user_id: user.id,
-          name: formData.name,
-          company: formData.company,
-          plan_type: user.plan_type,
-          updated_at: new Date().toISOString()
-        }], {
+          business_name: formData.business_name,
+          booking_link: formData.booking_link,
+          business_slug: businessSlug,
+          twilio_phone_number: formData.twilio_phone_number,
+          business_phone: formData.business_phone,
+          missed_call_automation_enabled: formData.missed_call_automation_enabled
+        }, {
           onConflict: 'user_id'
         })
 
-      // Save booking link to user_settings
-      // First try to update existing record
-      const { data: existingSettings } = await supabase
-        .from('user_settings')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      let settingsError = null
-
-      if (existingSettings) {
-        // Update existing record
-        const { error } = await supabase
-          .from('user_settings')
-          .update({
-            booking_link: formData.booking_link,
-            business_slug: formData.business_slug,
-            twilio_phone_number: formData.twilio_phone_number,
-            business_phone: formData.business_phone,
-            missed_call_automation_enabled: formData.missed_call_automation_enabled,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', user.id)
-        settingsError = error
-      } else {
-        // Insert new record
-        const { error } = await supabase
-          .from('user_settings')
-          .insert([{
-            user_id: user.id,
-            booking_link: formData.booking_link,
-            business_slug: formData.business_slug,
-            twilio_phone_number: formData.twilio_phone_number,
-            business_phone: formData.business_phone,
-            missed_call_automation_enabled: formData.missed_call_automation_enabled
-          }])
-        settingsError = error
-      }
-
-      if (profileError) {
-        console.error('Error saving profile:', profileError)
-        setError('Failed to save profile')
-      } else if (settingsError) {
+      if (settingsError) {
         console.error('Error saving settings:', settingsError)
-        if (settingsError.code === 'PGRST116') {
-          setError('Database table not found. Please run the migration script in Supabase SQL Editor.')
-        } else if (settingsError.code === '42501') {
-          setError('Permission denied. Please check your database permissions.')
-        } else if (settingsError.message?.includes('ON CONFLICT')) {
-          setError('Database constraint error. Please run the quick_fix_user_settings.sql script in Supabase SQL Editor.')
-        } else {
-          setError(`Failed to save settings: ${settingsError.message}`)
-        }
-      } else {
-        setSuccess('Profile updated successfully!')
-        setEditing(false)
-        // Update local user state
-        setUser(prev => prev ? {
-          ...prev,
-          name: formData.name,
-          company: formData.company
-        } : null)
-        setTimeout(() => setSuccess(''), 3000)
+        setError(`Failed to save settings: ${settingsError.message || 'Unknown error'}`)
+        return
       }
-    } catch (err) {
-      console.error('Error:', err)
+
+      setSuccess('Profile updated successfully!')
+      setEditing(false)
+      
+      // Update formData with the generated business_slug
+      setFormData(prev => ({ ...prev, business_slug: businessSlug }))
+    } catch (error) {
+      console.error('Error saving profile:', error)
       setError('Failed to save profile')
     } finally {
       setSaving(false)
@@ -290,22 +165,24 @@ export default function Profile() {
   }
 
   const handleLogout = async () => {
-    console.log('🚪 Profile handleLogout called')
-    // Clear LinkedIn session
-    clearLinkedInSession()
-    
-    if (user?.is_guest) {
-      console.log('🚪 Clearing guest session from Profile')
-      clearGuestSession()
-    } else {
-      console.log('🚪 Signing out from Supabase from Profile')
+    try {
+      // Clear LinkedIn session
+      clearLinkedInSession()
+      
+      // Clear guest session if applicable
+      if (isGuestUser()) {
+        clearGuestSession()
+      }
+      
+      // Sign out from Supabase
       await supabase.auth.signOut()
+      
+      // Redirect to login
+      navigate('/login')
+    } catch (error) {
+      console.error('Error logging out:', error)
     }
-    console.log('🚪 Navigating to login from Profile')
-    navigate('/login')
   }
-
-  // toggleTheme is now provided by useTheme hook
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -317,10 +194,10 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading profile...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading profile...</p>
         </div>
       </div>
     )
@@ -328,451 +205,323 @@ export default function Profile() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Profile Not Found</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">Unable to load your profile information.</p>
-          <button
-            onClick={() => navigate('/login')}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md"
-          >
-            Go to Login
-          </button>
+          <ExclamationTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">User not found</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              Manage your account information and preferences
-            </p>
-          </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Header */}
+        <PageHeader
+          title="Profile Settings"
+          subtitle="Manage your account information and preferences"
+        />
 
-          {/* Success/Error Messages */}
-          {success && (
-            <div className="mb-6 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 text-green-700 dark:text-green-300 px-4 py-3 rounded">
-              {success}
-            </div>
-          )}
+        {/* Success/Error Messages */}
+        {success && (
+          <Alert variant="success" className="mb-6">
+            {success}
+          </Alert>
+        )}
 
-          {error && (
-            <div className="mb-6 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
+        {error && (
+          <Alert variant="error" className="mb-6">
+            {error}
+          </Alert>
+        )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Profile Information */}
-            <div className="lg:col-span-2">
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                  <h2 className="text-lg font-medium text-gray-900 dark:text-white">Profile Information</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Profile Information */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Profile Information Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg mr-3">
+                      <UserIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <CardTitle>Profile Information</CardTitle>
+                  </div>
+                  <Button
+                    onClick={() => setEditing(!editing)}
+                    variant={editing ? 'outline' : 'primary'}
+                  >
+                    {editing ? 'Cancel' : 'Edit Profile'}
+                  </Button>
                 </div>
-                <div className="p-6 space-y-6">
-                  {/* Email (Read-only) */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={user.email}
-                      disabled
-                      className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 sm:text-sm"
-                    />
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Email cannot be changed
-                    </p>
-                  </div>
+              </CardHeader>
+              
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Email */}
+                  <Input
+                    type="email"
+                    label="Email Address"
+                    value={user.email}
+                    disabled
+                    helperText="Email cannot be changed"
+                  />
 
-                  {/* Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Full Name
-                    </label>
-                    {editing ? (
-                      <input
-                        type="text"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                        placeholder="Enter your full name"
-                      />
-                    ) : (
-                      <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                        {user.name || 'Not set'}
-                      </p>
-                    )}
-                  </div>
+                  {/* Business Name */}
+                  <Input
+                    type="text"
+                    label="Business Name"
+                    value={formData.business_name}
+                    onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
+                    disabled={!editing}
+                    placeholder="Enter your business name"
+                  />
 
-                  {/* Company */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Company
-                    </label>
-                    {editing ? (
-                      <input
-                        type="text"
-                        name="company"
-                        value={formData.company}
-                        onChange={handleInputChange}
-                        className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                        placeholder="Enter your company name"
-                      />
-                    ) : (
-                      <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                        {user.company || 'Not set'}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Booking Link */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Booking Link
-                    </label>
-                    {editing ? (
-                      <input
-                        type="url"
-                        name="booking_link"
-                        value={formData.booking_link}
-                        onChange={handleInputChange}
-                        className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                        placeholder="https://calendly.com/yourlink"
-                      />
-                    ) : (
-                      <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                        {formData.booking_link || 'Not set'}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      This link will be included in your AI-generated outreach messages
-                    </p>
-                  </div>
 
                   {/* Business Slug */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Lead Capture URL
+                    <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                      Business URL Slug
                     </label>
-                    {editing ? (
-                      <div>
-                        <input
-                          type="text"
-                          name="business_slug"
-                          value={formData.business_slug}
-                          onChange={handleInputChange}
-                          className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                          placeholder="my-business-name"
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Your public lead capture form will be available at: <br />
-                          <span className="font-mono text-blue-600 dark:text-blue-400">
-                            {window.location.origin}/leads/{formData.business_slug || 'your-slug'}
-                          </span>
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                          {formData.business_slug || 'Not set'}
-                        </p>
-                        {formData.business_slug && (
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Your lead capture form: <br />
-                            <a 
-                              href={`/leads/${formData.business_slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-mono text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              {window.location.origin}/leads/{formData.business_slug}
-                            </a>
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Create a custom URL for your lead capture form. Use lowercase letters, numbers, and hyphens only.
-                    </p>
-                    
-                    {/* QR Code Generation */}
-                    {formData.business_slug && (
-                      <div className="mt-4">
-                        <button
-                          onClick={() => setShowQRCode(true)}
-                          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        >
-                          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                          </svg>
-                          Generate QR Code
-                        </button>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Create a QR code for easy sharing of your lead capture form
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Twilio Settings */}
-                  <div className="border-t pt-6">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                      Missed Call Automation
-                    </h3>
-                    
-                    {/* Twilio Phone Number */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Twilio Phone Number
-                      </label>
-                      {editing ? (
-                        <input
-                          type="tel"
-                          name="twilio_phone_number"
-                          value={formData.twilio_phone_number}
-                          onChange={handleInputChange}
-                          className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                          placeholder="+1234567890"
-                        />
-                      ) : (
-                        <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                          {formData.twilio_phone_number || 'Not configured'}
-                        </p>
-                      )}
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Your Twilio phone number for receiving calls (format: +1234567890)
-                      </p>
-                    </div>
-
-                    {/* Business Phone */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Your Phone Number (for alerts)
-                      </label>
-                      {editing ? (
-                        <input
-                          type="tel"
-                          name="business_phone"
-                          value={formData.business_phone}
-                          onChange={handleInputChange}
-                          className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                          placeholder="+1234567890"
-                        />
-                      ) : (
-                        <p className="text-gray-900 dark:text-white py-2 px-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                          {formData.business_phone || 'Not configured'}
-                        </p>
-                      )}
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Phone number to receive missed call alerts
-                      </p>
-                    </div>
-
-                    {/* Missed Call Automation Toggle */}
-                    <div className="mb-4">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          name="missed_call_automation_enabled"
-                          checked={formData.missed_call_automation_enabled}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            missed_call_automation_enabled: e.target.checked
-                          }))}
-                          disabled={!editing}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded disabled:opacity-50"
-                        />
-                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                          Enable missed call SMS automation
-                        </span>
-                      </label>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        When enabled, automatically sends SMS responses to missed calls and alerts you
-                      </p>
-                    </div>
-
-                    {formData.missed_call_automation_enabled && formData.twilio_phone_number && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                          Webhook URL for Twilio
-                        </h4>
-                        <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
-                          Configure this URL in your Twilio phone number settings:
-                        </p>
-                        <code className="block text-xs bg-white dark:bg-gray-800 p-2 rounded border text-gray-800 dark:text-gray-200 break-all">
-                          {window.location.origin}/api/twilio/incoming-call
-                        </code>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-end space-x-3">
-                    {editing ? (
-                      <>
-                        <button
-                          onClick={() => {
-                            setEditing(false)
-                            setFormData({
-                              name: user.name || '',
-                              company: user.company || '',
-                              booking_link: formData.booking_link,
-                              business_slug: formData.business_slug,
-                              twilio_phone_number: formData.twilio_phone_number,
-                              business_phone: formData.business_phone,
-                              missed_call_automation_enabled: formData.missed_call_automation_enabled
-                            })
-                          }}
-                          className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleSave}
-                          disabled={saving}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {saving ? 'Saving...' : 'Save Changes'}
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setEditing(true)}
-                        disabled={user.is_guest}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {user.is_guest ? 'Edit Disabled (Guest Mode)' : 'Edit Profile'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Account Info */}
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">Account Info</h3>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Plan Type</dt>
-                    <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.plan_type === 'premium' 
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                      }`}>
-                        {user.plan_type === 'premium' ? 'Premium' : 'Free'}
+                    <div className="flex">
+                      <span className="inline-flex items-center px-4 py-3 rounded-l-lg border border-r-0 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-sm font-medium">
+                        getgetleads.com/leads/
                       </span>
-                    </dd>
+                      <input
+                        type="text"
+                        value={formData.business_slug}
+                        onChange={(e) => setFormData({ ...formData, business_slug: e.target.value })}
+                        disabled={!editing}
+                        className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-r-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        placeholder="your-business"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Your public lead capture URL</p>
                   </div>
+
+                  {/* Booking Link */}
+                  <div className="md:col-span-2">
+                    <Input
+                      type="url"
+                      label="Booking Link"
+                      value={formData.booking_link}
+                      onChange={(e) => setFormData({ ...formData, booking_link: e.target.value })}
+                      disabled={!editing}
+                      placeholder="https://calendly.com/your-username"
+                      helperText="Link to your booking calendar"
+                    />
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                {editing && (
+                  <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <Button
+                      onClick={handleSave}
+                      disabled={saving}
+                      loading={saving}
+                    >
+                      Save Changes
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* QR Code Generator */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center">
+                  <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg mr-3">
+                    <QrCodeIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <CardTitle>Lead Capture QR Code</CardTitle>
+                </div>
+                <CardDescription>
+                  Generate a QR code for your lead capture form
+                </CardDescription>
+              </CardHeader>
+              
+              <CardContent>
+                <div className="text-center">
+                  <Button
+                    onClick={() => setShowQRCode(true)}
+                    leftIcon={<QrCodeIcon className="h-5 w-5" />}
+                  >
+                    Generate QR Code
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Missed Call Automation */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center">
+                  <div className="p-2 bg-orange-100 dark:bg-orange-900/20 rounded-lg mr-3">
+                    <PhoneIcon className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <CardTitle>Missed Call Automation</CardTitle>
+                </div>
+                <CardDescription>
+                  Automatically send SMS to missed callers
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input
+                    type="tel"
+                    label="Twilio Phone Number"
+                    value={formData.twilio_phone_number}
+                    onChange={(e) => setFormData({ ...formData, twilio_phone_number: e.target.value })}
+                    disabled={!editing}
+                    placeholder="+1234567890"
+                  />
+                  <Input
+                    type="tel"
+                    label="Your Phone Number (for alerts)"
+                    value={formData.business_phone}
+                    onChange={(e) => setFormData({ ...formData, business_phone: e.target.value })}
+                    disabled={!editing}
+                    placeholder="+1234567890"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                   <div>
-                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Member Since</dt>
-                    <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                      {formatDate(user.created_at)}
-                    </dd>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Enable missed call SMS automation</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Automatically send SMS to missed callers</p>
+                  </div>
+                  <button
+                    onClick={() => setFormData({ ...formData, missed_call_automation_enabled: !formData.missed_call_automation_enabled })}
+                    disabled={!editing}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      formData.missed_call_automation_enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
+                    } ${!editing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        formData.missed_call_automation_enabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column - Account Info & Settings */}
+          <div className="space-y-6">
+            {/* Account Info */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg mr-3">
+                    <ShieldCheckIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <CardTitle>Account Info</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Plan Type</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white capitalize bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">{user.plan_type}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Member Since</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(user.created_at)}</span>
                   </div>
                   {user.is_guest && (
-                    <div>
-                      <dt className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Mode</dt>
-                      <dd className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                        Guest Mode
-                      </dd>
-                    </div>
+                    <Alert variant="warning">
+                      You are exploring in guest mode. Your data won't be saved permanently.
+                    </Alert>
                   )}
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Upgrade to Premium */}
-              {user.plan_type === 'free' && !user.is_guest && (
-                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900 dark:to-indigo-900 border border-purple-200 dark:border-purple-700 rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-purple-900 dark:text-purple-100 mb-2">
-                    Upgrade to Premium
-                  </h3>
-                  <p className="text-sm text-purple-700 dark:text-purple-300 mb-4">
-                    Unlock advanced features and unlimited usage
-                  </p>
-                  <button className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                    Upgrade Now
-                  </button>
+            {/* Upgrade to Premium */}
+            <Card className="bg-gradient-to-r from-purple-600 to-blue-600 border-0 text-white">
+              <CardContent className="text-center">
+                <div className="p-3 bg-white/20 rounded-full w-fit mx-auto mb-4">
+                  <SparklesIcon className="h-6 w-6 text-white" />
                 </div>
-              )}
+                <h3 className="text-lg font-bold text-white mb-2">Upgrade to Premium</h3>
+                <p className="text-sm text-purple-100 mb-6">Unlock advanced features and unlimited usage</p>
+                <Button className="w-full bg-white text-purple-600 hover:bg-gray-100">
+                  Upgrade Now
+                </Button>
+              </CardContent>
+            </Card>
 
-              {/* Theme Settings */}
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">Appearance</h3>
-                </div>
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <dt className="text-sm font-medium text-gray-700 dark:text-gray-300">Theme</dt>
-                      <dd className="text-sm text-gray-500 dark:text-gray-400">
-                        {isDark ? 'Dark mode' : 'Light mode'}
-                      </dd>
-                    </div>
-                    <button
-                      onClick={toggleTheme}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        isDark ? 'bg-indigo-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          isDark ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
+            {/* Appearance */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center">
+                  <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg mr-3">
+                    <CogIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
+                  <CardTitle>Appearance</CardTitle>
                 </div>
-              </div>
-
-              {/* Google Calendar Integration */}
-              <div className="mb-6">
-                <GoogleCalendarIntegration onConnectionChange={setGoogleCalendarConnected} />
-              </div>
-
-              {/* Business Calendar View - Only show when connected */}
-              {googleCalendarConnected && (
-                <div className="mb-6">
-                  <BusinessCalendarView onError={(error) => setError(error)} />
-                </div>
-              )}
-
-              {/* Logout */}
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div className="p-6">
+                <CardDescription>Choose your preferred theme</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg mr-3">
+                      {isDark ? (
+                        <MoonIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      ) : (
+                        <SunIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">Theme</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {isDark ? 'Dark mode' : 'Light mode'}
+                      </p>
+                    </div>
+                  </div>
                   <button
-                    onClick={handleLogout}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                    onClick={toggleTheme}
+                    className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 dark:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {user.is_guest ? 'Exit Guest Mode' : 'Sign Out'}
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isDark ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
                   </button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+
+
+            {/* Sign Out */}
+            <Card>
+              <CardContent>
+                <Button
+                  onClick={handleLogout}
+                  variant="danger"
+                  className="w-full"
+                >
+                  Sign Out
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
 
       {/* QR Code Modal */}
-      {showQRCode && formData.business_slug && (
-        <QRCodeGenerator
-          businessSlug={formData.business_slug}
-          businessName={formData.company || user?.name || 'Your Business'}
-          onClose={() => setShowQRCode(false)}
+      {showQRCode && (
+        <QRCodeGenerator 
+          businessSlug={formData.business_slug} 
+          businessName={formData.business_name || 'Your Business'}
+          onClose={() => setShowQRCode(false)} 
         />
       )}
     </div>

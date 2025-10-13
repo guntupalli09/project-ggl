@@ -8,6 +8,13 @@ import { useDashboardAnalytics } from '../hooks/useDashboardAnalytics'
 import LeadsBySourceChart from '../components/LeadsBySourceChart'
 import ResponseTimeMetric from '../components/ResponseTimeMetric'
 import TopChannelsMetric from '../components/TopChannelsMetric'
+import LeadToBookingMetrics from '../components/LeadToBookingMetrics'
+import NichePlaybooks from '../components/NichePlaybooks'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Alert } from '../components/ui/Alert'
 import {
   UserPlusIcon,
   PhoneIcon,
@@ -301,71 +308,64 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Dashboard</h1>
-            </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Header */}
+        <PageHeader
+          title="Dashboard"
+          subtitle="Monitor your lead generation and business performance"
+          actions={
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-700 dark:text-gray-300">
                 Welcome, {user?.email}
               </span>
-              <button
+              <Button
+                variant="outline"
                 onClick={handleSignOut}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                size="sm"
               >
                 Sign Out
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+          }
+        />
         
         {/* Guest Mode Warning Banner */}
         {isGuest && (
-          <div className="mb-8 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.725-1.36 3.49 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-4 flex-1">
-                <h3 className="text-lg font-medium text-yellow-800 dark:text-yellow-200 mb-2">
-                  🎯 You are exploring in guest mode
-                </h3>
-                <p className="text-yellow-700 dark:text-yellow-300 mb-4">
-                  Your data won't be saved permanently. This is a demo version where you can explore all features without creating an account.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    onClick={() => navigate('/login')}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <Alert
+            variant="warning"
+            title="🎯 You are exploring in guest mode"
+            className="mb-8"
+          >
+            <div className="space-y-4">
+              <p>
+                Your data won't be saved permanently. This is a demo version where you can explore all features without creating an account.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  onClick={() => navigate('/login')}
+                  leftIcon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7" />
                     </svg>
-                    Sign in to save your work
-                  </button>
-                  <button
-                    onClick={() => navigate('/signup')}
-                    className="inline-flex items-center px-4 py-2 border border-yellow-300 dark:border-yellow-600 text-sm font-medium rounded-md text-yellow-800 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-900/20 hover:bg-yellow-200 dark:hover:bg-yellow-900/40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  }
+                >
+                  Sign in to save your work
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/signup')}
+                  leftIcon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                     </svg>
-                    Create free account
-                  </button>
-                </div>
+                  }
+                >
+                  Create free account
+                </Button>
               </div>
             </div>
-          </div>
+          </Alert>
         )}
 
         {/* Key Metrics Cards */}
@@ -531,84 +531,54 @@ export default function Dashboard() {
         </div>
 
         {/* Revenue Input Section */}
-        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
+        <Card variant="elevated" className="mb-8">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
             <div className="flex items-center">
               <ArrowTrendingUpIcon className="h-6 w-6 text-purple-600 dark:text-purple-400 mr-3" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue Tracking</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Track your weekly revenue and conversion metrics</p>
+                <CardTitle>Revenue Tracking</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Track your weekly revenue and conversion metrics</p>
               </div>
             </div>
-          </div>
-          <div className="p-6">
+          </CardHeader>
+          <CardContent>
             <form onSubmit={handleRevenueSubmit} className="flex items-end space-x-4">
               <div className="flex-1">
-                <label htmlFor="revenue" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Revenue earned this week
-                </label>
-                <div className="relative rounded-lg shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 dark:text-gray-400 sm:text-sm">$</span>
-                  </div>
-                  <input
-                    type="number"
-                    id="revenue"
-                    step="0.01"
-                    min="0"
-                    className="block w-full pl-7 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
-                    placeholder="0.00"
-                    value={revenueInput}
-                    onChange={(e) => setRevenueInput(e.target.value)}
-                    required
-                  />
-                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  label="Revenue earned this week"
+                  placeholder="0.00"
+                  value={revenueInput}
+                  onChange={(e) => setRevenueInput(e.target.value)}
+                  leftIcon="$"
+                  required
+                />
               </div>
-              <button
+              <Button
                 type="submit"
-                disabled={revenueSubmitting}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-8 py-3 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-lg hover:shadow-xl transition-all duration-200"
+                loading={revenueSubmitting}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               >
-                {revenueSubmitting ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving...
-                  </>
-                ) : (
-                  'Save Revenue'
-                )}
-              </button>
+                Save Revenue
+              </Button>
             </form>
             {revenueError && (
-              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-red-600 dark:text-red-400 text-sm">{revenueError}</p>
-              </div>
+              <Alert variant="error" className="mt-4">
+                {revenueError}
+              </Alert>
             )}
             {stats.totalRevenue > 0 && (
-              <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-semibold text-green-800 dark:text-green-200">
-                      Revenue tracking active! 🎉
-                    </h3>
-                    <div className="mt-2 text-sm text-green-700 dark:text-green-300">
-                      <p><strong>Total Revenue:</strong> ${stats.totalRevenue.toLocaleString()}</p>
-                      <p><strong>Conversion Rate:</strong> {stats.conversionRate.toFixed(1)}% ({stats.bookedLeads} bookings ÷ {stats.newLeadsThisWeek + stats.contactedLeads + stats.bookedLeads} total leads)</p>
-                    </div>
-                  </div>
+              <Alert variant="success" className="mt-6" title="Revenue tracking active! 🎉">
+                <div className="space-y-1">
+                  <p><strong>Total Revenue:</strong> ${stats.totalRevenue.toLocaleString()}</p>
+                  <p><strong>Conversion Rate:</strong> {stats.conversionRate.toFixed(1)}% ({stats.bookedLeads} bookings ÷ {stats.newLeadsThisWeek + stats.contactedLeads + stats.bookedLeads} total leads)</p>
                 </div>
-              </div>
+              </Alert>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Analytics Section */}
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -662,75 +632,90 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Lead-to-Booking Metrics */}
+        <div className="mt-8">
+          <LeadToBookingMetrics />
+        </div>
+
+        {/* Niche Playbooks */}
+        <div className="mt-8">
+          <NichePlaybooks />
+        </div>
+
         {/* Quick Actions */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Link
             to="/leads"
-            className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-all duration-200 group"
+            className="group"
           >
-            <div className="p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
-                    <UserPlusIcon className="w-6 h-6 text-white" />
+            <Card className="hover:shadow-xl transition-all duration-200 group-hover:scale-105">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+                      <UserPlusIcon className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      Manage Leads
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">View and manage your lead pipeline</p>
                   </div>
                 </div>
-                <div className="ml-4 flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    Manage Leads
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">View and manage your lead pipeline</p>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </Link>
 
           <Link
             to="/crm"
-            className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-all duration-200 group"
+            className="group"
           >
-            <div className="p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
-                    <PhoneIcon className="w-6 h-6 text-white" />
+            <Card className="hover:shadow-xl transition-all duration-200 group-hover:scale-105">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+                      <PhoneIcon className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                      CRM Contacts
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Manage customer relationships</p>
                   </div>
                 </div>
-                <div className="ml-4 flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                    CRM Contacts
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Manage customer relationships</p>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </Link>
 
           <Link
             to="/social-automation"
-            className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-all duration-200 group"
+            className="group"
           >
-            <div className="p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-10 0a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2M9 12h6m-6 4h6" />
-                    </svg>
+            <Card className="hover:shadow-xl transition-all duration-200 group-hover:scale-105">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-10 0a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2M9 12h6m-6 4h6" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
+                      Social Automation
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Automate social media posts</p>
                   </div>
                 </div>
-                <div className="ml-4 flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
-                    Social Automation
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Automate social media posts</p>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </Link>
         </div>
-        </div>
-      </main>
+      </div>
     </div>
   )
 }
