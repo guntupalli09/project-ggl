@@ -408,6 +408,46 @@ export default function Profile() {
                     />
                   </button>
                 </div>
+
+                {/* Twilio Webhook URL Section */}
+                {formData.missed_call_automation_enabled && (
+                  <div className="mt-6 p-5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">Webhook URL for Twilio</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                      Configure this URL in your Twilio phone number settings:
+                    </p>
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="text"
+                        value="https://www.getgetleads.com/api/twilio/incoming-call"
+                        readOnly
+                        className="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded-lg text-sm font-mono text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('https://www.getgetleads.com/api/twilio/incoming-call')
+                          // You could add a toast notification here
+                        }}
+                        className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                        <strong>Setup Instructions:</strong>
+                      </p>
+                      <ol className="text-sm text-yellow-700 dark:text-yellow-300 mt-2 ml-4 list-decimal space-y-1">
+                        <li>Go to your Twilio Console</li>
+                        <li>Navigate to Phone Numbers → Manage → Active numbers</li>
+                        <li>Click on your phone number</li>
+                        <li>In the "Webhook" section, set the URL to the above webhook URL</li>
+                        <li>Set HTTP method to "POST"</li>
+                        <li>Save the configuration</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
