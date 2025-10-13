@@ -19,14 +19,14 @@ interface Booking {
   status: string
 }
 
-interface Lead {
-  id: string
-  user_id: string
-  name: string
-  email: string
-  phone: string
-  company: string
-}
+// interface Lead {
+//   id: string
+//   user_id: string
+//   name: string
+//   email: string
+//   phone: string
+//   company: string
+// }
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -34,7 +34,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { bookingId, triggerType = 'booking_completed' } = req.body
+    const { bookingId } = req.body
 
     if (!bookingId) {
       return res.status(400).json({ error: 'bookingId is required' })
@@ -62,7 +62,11 @@ export default async function handler(req: any, res: any) {
       return res.status(404).json({ error: 'User settings not found' })
     }
 
-    const results = {
+    const results: {
+      reviewRequest: { id: string; message: string; sent: boolean } | null;
+      referralRequest: { id: string; message: string; sent: boolean } | null;
+      errors: string[];
+    } = {
       reviewRequest: null,
       referralRequest: null,
       errors: []
