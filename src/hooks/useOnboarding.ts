@@ -37,9 +37,9 @@ export const useOnboarding = (): OnboardingStatus => {
       try {
         const { data, error } = await supabase
           .from('user_settings')
-          .select('niche_template_id')
+          .select('niche_template_id, business_name, business_slug')
           .eq('user_id', user.id)
-          .single()
+          .maybeSingle()
 
         console.log('📝 useOnboarding: Database query result:', { data, error })
 
@@ -48,9 +48,9 @@ export const useOnboarding = (): OnboardingStatus => {
             // No user settings found, onboarding not completed
             console.log('📝 useOnboarding: No user settings found, onboarding not completed')
             setIsCompleted(false)
-          } else if (error.code === 'PGRST301' || error.message?.includes('406')) {
-            // RLS policy issue or permission denied - treat as not onboarded
-            console.log('📝 useOnboarding: RLS/permission error, treating as not onboarded:', error.message)
+          } else if (error.code === 'PGRST301' || error.message?.includes('406') || error.code === 'PGRST301') {
+            // RLS policy issue, permission denied, or column doesn't exist - treat as not onboarded
+            console.log('📝 useOnboarding: Database error, treating as not onboarded:', error.message)
             setIsCompleted(false)
           } else {
             console.log('📝 useOnboarding: Database error:', error)
@@ -58,15 +58,22 @@ export const useOnboarding = (): OnboardingStatus => {
             setIsCompleted(false)
           }
         } else {
-          // Check if niche_template_id is set
+          // Check if user has completed basic onboarding (has business info or niche template)
+          const hasBasicInfo = data?.business_name && data?.business_slug
           const hasNicheTemplate = !!data?.niche_template_id
-          console.log('📝 useOnboarding: Niche template check:', { 
+          const isOnboarded = hasBasicInfo || hasNicheTemplate
+          
+          console.log('📝 useOnboarding: Onboarding check:', { 
+            business_name: data?.business_name,
+            business_slug: data?.business_slug,
             niche_template_id: data?.niche_template_id, 
+            hasBasicInfo,
             hasNicheTemplate,
+            isOnboarded,
             fullData: data 
           })
-          console.log('📝 useOnboarding: Setting isCompleted to:', hasNicheTemplate)
-          setIsCompleted(hasNicheTemplate)
+          console.log('📝 useOnboarding: Setting isCompleted to:', isOnboarded)
+          setIsCompleted(isOnboarded)
         }
       } catch (err) {
         console.error('📝 useOnboarding: Error checking onboarding status:', err)

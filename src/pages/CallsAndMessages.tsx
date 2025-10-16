@@ -56,16 +56,20 @@ export default function CallsAndMessages() {
   const [activeTab, setActiveTab] = useState<'calls' | 'messages'>('calls')
 
   useEffect(() => {
-    checkConnectionStatus()
-    
-    // Check if we're coming from a Google Calendar OAuth callback
-    const urlParams = new URLSearchParams(window.location.search)
-    const code = urlParams.get('code')
-    const state = urlParams.get('state')
-    
-    if (code && state) {
-      // We're coming from Google Calendar OAuth callback
-      handleGoogleCallback(code, state)
+    if (!isGuestUser()) {
+      checkConnectionStatus()
+      
+      // Check if we're coming from a Google Calendar OAuth callback
+      const urlParams = new URLSearchParams(window.location.search)
+      const code = urlParams.get('code')
+      const state = urlParams.get('state')
+      
+      if (code && state) {
+        // We're coming from Google Calendar OAuth callback
+        handleGoogleCallback(code, state)
+      }
+    } else {
+      setLoading(false)
     }
   }, [])
 
@@ -95,21 +99,21 @@ export default function CallsAndMessages() {
   }
 
   useEffect(() => {
-    if (isConnected) {
+    if (!isGuestUser() && isConnected) {
       fetchConversations()
       fetchCallLogs()
     }
   }, [isConnected])
 
   useEffect(() => {
-    if (selectedConversation) {
+    if (!isGuestUser() && selectedConversation) {
       fetchMessages(selectedConversation)
     }
   }, [selectedConversation])
 
   // Auto-refresh every 30 seconds for call logs, 10 seconds for messages
   useEffect(() => {
-    if (isConnected) {
+    if (!isGuestUser() && isConnected) {
       const callLogsInterval = cleanup.setInterval(() => {
         fetchCallLogs()
       }, 30000) // Check for new calls every 30 seconds
@@ -199,6 +203,8 @@ export default function CallsAndMessages() {
   }
 
   const fetchCallLogs = async () => {
+    if (isGuestUser()) return
+    
     try {
       setCallLogsLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
@@ -245,6 +251,8 @@ export default function CallsAndMessages() {
   }
 
   const fetchConversations = async () => {
+    if (isGuestUser()) return
+    
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -299,6 +307,8 @@ export default function CallsAndMessages() {
   }
 
   const fetchMessages = async (conversationId: string) => {
+    if (isGuestUser()) return
+    
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -337,6 +347,8 @@ export default function CallsAndMessages() {
   }
 
   const sendMessage = async () => {
+    if (isGuestUser()) return
+    
     if (!newMessage.trim() || !selectedConversation || sending) return
 
     setSending(true)
@@ -392,6 +404,8 @@ export default function CallsAndMessages() {
   }
 
   const sendAIFollowup = async (callId: string) => {
+    if (isGuestUser()) return
+    
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -425,6 +439,8 @@ export default function CallsAndMessages() {
   }
 
   const handleDisconnect = async () => {
+    if (isGuestUser()) return
+    
     if (!window.confirm('Are you sure you want to disconnect Google Business Profile? This will stop call and message tracking.')) {
       return
     }
@@ -518,49 +534,69 @@ export default function CallsAndMessages() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
-          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ChatBubbleLeftRightIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-          </div>
-          
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Connect Google Business Profile
-          </h2>
-          
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Link your Google Business Profile to manage customer messages directly from here.
-          </p>
-          
-          {error && (
-            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                {error}
-              </p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Guest Mode Warning */}
+          {isGuestUser() && (
+            <div className="mb-6">
+              <GuestModeWarning 
+                feature="Google Business Profile Integration"
+                description="Google Business Profile integration is not available in guest mode. Sign in to connect your Google Business Profile and manage calls and messages."
+                actionText="Sign in to connect your Google Business Profile"
+              />
             </div>
           )}
-          
-          <button
-            onClick={handleConnect}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            Connect Google Business
-          </button>
+
+          {!isGuestUser() && (
+            <div className="flex items-center justify-center p-4">
+              <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ChatBubbleLeftRightIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  Connect Google Business Profile
+                </h2>
+                
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Link your Google Business Profile to manage customer messages directly from here.
+                </p>
+                
+                {error && (
+                  <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      {error}
+                    </p>
+                  </div>
+                )}
+                
+                <button
+                  onClick={handleConnect}
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Connect Google Business
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
   }
+
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Guest Mode Warning */}
         {isGuestUser() && (
-          <GuestModeWarning 
-            feature="Calls & Messages Integration"
-            description="Calls & Messages integration is not available in guest mode. Sign in to connect your Google Business Profile and manage customer calls and messages."
-            actionText="Sign in to connect your Google Business Profile"
-          />
+          <div className="mb-6">
+            <GuestModeWarning 
+              feature="Google Business Profile Integration"
+              description="Google Business Profile integration is not available in guest mode. Sign in to connect your Google Business Profile and manage calls and messages."
+              actionText="Sign in to connect your Google Business Profile"
+            />
+          </div>
         )}
 
         {!isGuestUser() && (
@@ -575,27 +611,23 @@ export default function CallsAndMessages() {
                   <CheckCircleIcon className="w-5 h-5 mr-1" />
                   <span className="text-sm font-medium">Connected</span>
                 </div>
-                {!isGuestUser() && (
-                  <>
-                    <button
-                      onClick={() => {
-                        fetchConversations()
-                        fetchCallLogs()
-                      }}
-                      className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                      title="Refresh"
-                    >
-                      <ArrowPathIcon className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={handleDisconnect}
-                      className="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-300"
-                      title="Disconnect Google Business Profile"
-                    >
-                      <XMarkIcon className="w-5 h-5" />
-                    </button>
-                  </>
-                )}
+                <button
+                  onClick={() => {
+                    fetchConversations()
+                    fetchCallLogs()
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title="Refresh"
+                >
+                  <ArrowPathIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleDisconnect}
+                  className="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                  title="Disconnect Google Business Profile"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
               </div>
             </div>
             
