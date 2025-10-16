@@ -215,14 +215,33 @@ export const debugLocalStorage = () => {
   console.log('🔍 DEBUG: LinkedIn-related keys:', linkedinKeys)
 }
 
-// Check if LinkedIn is connected
+// Cache for LinkedIn connection status to avoid repeated checks
+let linkedinConnectionCache: { status: boolean | null; timestamp: number } = { status: null, timestamp: 0 }
+const CACHE_DURATION = 5000 // 5 seconds cache
+
+// Check if LinkedIn is connected (with caching to reduce excessive logging)
 export const isLinkedInConnected = (): boolean => {
+  const now = Date.now()
+  
+  // Return cached result if still valid
+  if (linkedinConnectionCache.status !== null && (now - linkedinConnectionCache.timestamp) < CACHE_DURATION) {
+    return linkedinConnectionCache.status
+  }
+  
   const connected = localStorage.getItem('is_linkedin_connected') === 'true'
-  console.log('🔍 Checking LinkedIn connection:', {
-    is_linkedin_connected: localStorage.getItem('is_linkedin_connected'),
-    connected: connected,
-    linkedin_session: localStorage.getItem('linkedin_session') ? 'exists' : 'null',
-    linkedin_access_token: localStorage.getItem('linkedin_access_token') ? 'exists' : 'null'
-  })
+  
+  // Only log on first check or when status changes
+  if (linkedinConnectionCache.status !== connected) {
+    console.log('🔍 LinkedIn connection status:', {
+      is_linkedin_connected: localStorage.getItem('is_linkedin_connected'),
+      connected: connected,
+      linkedin_session: localStorage.getItem('linkedin_session') ? 'exists' : 'null',
+      linkedin_access_token: localStorage.getItem('linkedin_access_token') ? 'exists' : 'null'
+    })
+  }
+  
+  // Update cache
+  linkedinConnectionCache = { status: connected, timestamp: now }
+  
   return connected
 }

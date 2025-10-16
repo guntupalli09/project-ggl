@@ -1,24 +1,31 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useTheme } from './hooks/useTheme'
-import Sidebar from './components/Sidebar'
+import ResponsiveLayout from './components/ResponsiveLayout'
+import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
-import Dashboard from './pages/Dashboard'
-import CRM from './pages/CRM'
+import Analytics from './pages/Analytics'
+import Contacts from './pages/Contacts'
 import SocialAutomation from './pages/SocialAutomation'
 import Profile from './pages/Profile'
-import DailyGrowth from './pages/DailyGrowth'
 import BrandVoice from './pages/BrandVoice'
 import LinkedInMain from './pages/LinkedInMain'
 import LinkedInCallback from './pages/LinkedInCallback'
-import Leads from './pages/Leads'
 import Automations from './pages/Automations'
 import PublicLeadCapture from './pages/PublicLeadCapture'
 import Calendar from './pages/Calendar'
 import Messages from './pages/Messages'
-import BusinessPerformance from './pages/BusinessPerformance'
 import Reviews from './pages/Reviews'
+import ReviewCollection from './pages/ReviewCollection'
+import ReferralLanding from './pages/ReferralLanding'
+import Onboarding from './pages/Onboarding'
+import NicheDemo from './pages/NicheDemo'
+import AuthDebug from './pages/AuthDebug'
+import Settings from './pages/Settings'
+import AppStatus from './components/AppStatus'
+import ErrorBoundary from './components/ErrorBoundary'
+// Workflow engine is only used on server-side
 
 function App() {
   const { theme } = useTheme()
@@ -32,40 +39,47 @@ function App() {
     }
   }, [theme])
 
+  // Workflow engine is initialized on server-side only
+
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    <ErrorBoundary>
+      <Router>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          <AppStatus />
+          <Routes>
+          <Route path="/" element={<Navigate to="/analytics" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/niche-demo" element={<NicheDemo />} />
+              <Route path="/auth-debug" element={<AuthDebug />} />
           <Route path="/linkedin" element={<LinkedInMain />} />
           <Route path="/linkedin/callback" element={<LinkedInCallback />} />
           <Route path="/leads/:businessSlug" element={<PublicLeadCapture />} />
+          <Route path="/review/:bookingId" element={<ReviewCollection />} />
+          <Route path="/r/:referralCode" element={<ReferralLanding />} />
           <Route path="/*" element={
-            <div className="flex">
-              <Sidebar isOpen={true} onClose={() => {}} />
-              <main className="flex-1 ml-64">
-                    <Routes>
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/leads" element={<Leads />} />
-                      <Route path="/crm" element={<CRM />} />
-                      <Route path="/social-automation" element={<SocialAutomation />} />
-                      <Route path="/automations" element={<Automations />} />
-                      <Route path="/profile" element={<Profile />} />
-                      <Route path="/calendar" element={<Calendar />} />
-                      <Route path="/messages" element={<Messages />} />
-                      <Route path="/business-performance" element={<BusinessPerformance />} />
-                      <Route path="/reviews" element={<Reviews />} />
-                      <Route path="/daily-growth" element={<DailyGrowth />} />
-                      <Route path="/brand-voice" element={<BrandVoice />} />
-                    </Routes>
-              </main>
-            </div>
+            <ProtectedRoute>
+              <ResponsiveLayout>
+                <Routes>
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/contacts" element={<Contacts />} />
+                  <Route path="/social-automation" element={<SocialAutomation />} />
+                  <Route path="/automations" element={<Automations />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/calendar" element={<Calendar />} />
+                  <Route path="/messages" element={<Messages />} />
+                  <Route path="/reviews" element={<Reviews />} />
+                  <Route path="/brand-voice" element={<BrandVoice />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </ResponsiveLayout>
+            </ProtectedRoute>
           } />
         </Routes>
       </div>
     </Router>
+    </ErrorBoundary>
   )
 }
 

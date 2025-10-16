@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import ResponsivePageWrapper from '../components/ResponsivePageWrapper'
 
 interface BrandVoice {
   id: string
@@ -117,26 +118,20 @@ export default function BrandVoice() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="h-full bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading brand voice settings...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading brand voice settings...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Brand Voice</h1>
-            <p className="mt-2 text-gray-600">
-              Define your brand's tone and voice to ensure consistent messaging across all AI-generated content
-            </p>
-          </div>
+    <ResponsivePageWrapper
+      title="Brand Voice"
+      description="Define your brand's tone and voice to ensure consistent messaging across all AI-generated content"
+    >
 
           {/* Success Message */}
           {success && (
@@ -161,7 +156,7 @@ export default function BrandVoice() {
               </p>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-6">
+            <form onSubmit={handleSave} className="p-6 space-y-4">
               {/* Brand Tone */}
               <div>
                 <label htmlFor="brandTone" className="block text-sm font-medium text-gray-700 mb-2">
@@ -282,8 +277,6 @@ export default function BrandVoice() {
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </ResponsivePageWrapper>
   )
 }

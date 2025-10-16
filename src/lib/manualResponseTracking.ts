@@ -9,7 +9,7 @@ export async function markLeadResponded(leadId: string, responseNotes?: string) 
     const { error: leadError } = await supabase
       .from('leads')
       .update({
-        status: 'responded',
+        status: 'contacted', // Use valid status value
         last_inbound_message: new Date().toISOString(),
         notes: responseNotes ? `${responseNotes}\n\n[Response received: ${new Date().toLocaleDateString()}]` : undefined
       })
@@ -51,7 +51,7 @@ export async function markLeadNoResponse(leadId: string, reason?: string) {
     const { error } = await supabase
       .from('leads')
       .update({
-        status: 'no_response',
+        status: 'contacted', // Use valid status value - could also be 'new' if no response
         notes: reason ? `${reason}\n\n[No response: ${new Date().toLocaleDateString()}]` : undefined
       })
       .eq('id', leadId)

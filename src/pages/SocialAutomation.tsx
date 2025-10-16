@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import { getCurrentUser } from '../lib/authUtils'
 import SocialAccountManager from '../components/SocialAccountManager'
 import AISocialPostGenerator from '../components/AISocialPostGenerator'
+import ResponsivePageWrapper from '../components/ResponsivePageWrapper'
+import ResponsiveGrid from '../components/ResponsiveGrid'
 
 // Connected Accounts component with shared state
 const ConnectedAccounts = ({ onAccountUpdate }: { onAccountUpdate: () => void }) => (
@@ -194,7 +196,7 @@ export default function SocialAutomation() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="h-full bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -204,48 +206,45 @@ export default function SocialAutomation() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Social Media Automation</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Manage your social media presence with automated posting and scheduling
-          </p>
-        </div>
+    <ResponsivePageWrapper 
+      title="Social Media" 
+      description="Manage your social media presence with automated posting and scheduling"
+    >
 
 
         {/* Tab Navigation */}
-        <div className="mb-8">
-          <div className="border-b border-gray-200 dark:border-gray-700">
-            <nav className="-mb-px flex space-x-8">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                    activeTab === tab.id
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
-                >
-                  <span className="mr-2">{tab.icon}</span>
-                  {tab.name}
-                </button>
-              ))}
-            </nav>
+        <div className="mb-6">
+          <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
+            <div className="border-b border-gray-200 dark:border-gray-700">
+              <nav className="flex overflow-x-auto" aria-label="Tabs">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-4 px-4 sm:px-6 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
+                      activeTab === tab.id
+                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                  >
+                    <span className="mr-2">{tab.icon}</span>
+                    {tab.name}
+                  </button>
+                ))}
+              </nav>
+            </div>
           </div>
         </div>
 
         {/* Tab Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <ResponsiveGrid cols={{ default: 1, lg: 3 }} gap="md">
           {/* Main Content */}
           <div className="lg:col-span-2">
             {renderActiveTab()}
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Quick Stats */}
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Quick Stats</h3>
@@ -306,8 +305,7 @@ export default function SocialAutomation() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </ResponsiveGrid>
+    </ResponsivePageWrapper>
   )
 }

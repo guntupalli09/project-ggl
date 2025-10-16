@@ -20,17 +20,23 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('🔐 Login: Attempting to sign in with:', { email })
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
+      console.log('🔐 Login: Sign in result:', { data, error })
+
       if (error) {
+        console.log('❌ Login: Sign in error:', error.message)
         setError(error.message)
       } else {
+        console.log('✅ Login: Sign in successful, navigating to dashboard')
         navigate('/dashboard')
       }
     } catch (err) {
+      console.log('❌ Login: Unexpected error:', err)
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Great Clips Pages</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .test-link { 
+            display: block; 
+            margin: 20px 0; 
+            padding: 15px; 
+            background: #f0f0f0; 
+            text-decoration: none; 
+            color: #333; 
+            border-radius: 5px;
+        }
+        .test-link:hover { background: #e0e0e0; }
+    </style>
+</head>
+<body>
+    <h1>🎬 Great Clips Scenario Test Pages</h1>
+    
+    <h2>Test the Complete Customer Journey:</h2>
+    
+    <a href="http://localhost:5173/review/0587ffb2-e019-419f-aa98-1dc64ddd02f6" 
+       class="test-link" target="_blank">
+        📝 Review Collection Page
+        <br><small>Customer submits review after service</small>
+    </a>
+    
+    <a href="http://localhost:5173/r/GC0ZXOK2" 
+       class="test-link" target="_blank">
+        🎁 Referral Landing Page
+        <br><small>Friend uses referral link to get discount</small>
+    </a>
+    
+    <a href="http://localhost:5173/reviews" 
+       class="test-link" target="_blank">
+        📊 Reviews Dashboard
+        <br><small>Business owner views all reviews and referrals</small>
+    </a>
+    
+    <h2>Expected Behavior:</h2>
+    <ul>
+        <li><strong>Review Collection:</strong> Should show a form asking "How was your Women's Haircut?" with star rating</li>
+        <li><strong>Referral Landing:</strong> Should show "You're Invited!" with $10 discount offer</li>
+        <li><strong>Reviews Dashboard:</strong> Should show statistics and recent reviews</li>
+    </ul>
+    
+    <h2>If Pages Show Errors:</h2>
+    <p>The pages are designed to work with fallback data, so they should still function even if database access is limited.</p>
+</body>
+</html>
+

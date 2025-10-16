@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { getReviewStats } from '../lib/reviewRequestSystem'
+import { getReferralStats } from '../lib/referralSystem'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -11,7 +13,9 @@ import {
   UserGroupIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  ClockIcon
+  ClockIcon,
+  GiftIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline'
 
 interface Review {
@@ -44,6 +48,19 @@ interface ReferralRequest {
 export default function Reviews() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [referralRequests, setReferralRequests] = useState<ReferralRequest[]>([])
+  const [reviewStats, setReviewStats] = useState({
+    total_reviews: 0,
+    average_rating: 0,
+    positive_reviews: 0,
+    recent_reviews: [] as any[]
+  })
+  const [referralStats, setReferralStats] = useState({
+    total_referrals_sent: 0,
+    total_conversions: 0,
+    conversion_rate: 0,
+    total_rewards_given: 0,
+    recent_referrals: [] as any[]
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -59,6 +76,18 @@ export default function Reviews() {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+
+      // Fetch review and referral statistics
+      try {
+        const [reviewStatsData, referralStatsData] = await Promise.all([
+          getReviewStats(user.id),
+          getReferralStats(user.id)
+        ])
+        setReviewStats(reviewStatsData)
+        setReferralStats(referralStatsData)
+      } catch (statsError) {
+        console.error('Error fetching stats:', statsError)
+      }
 
       // First, try to fetch real Google reviews
       try {
@@ -195,7 +224,7 @@ export default function Reviews() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="h-full bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading reviews and referrals...</p>
@@ -205,7 +234,7 @@ export default function Reviews() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-full bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <PageHeader
           title="Reviews & Referrals"
@@ -230,14 +259,15 @@ export default function Reviews() {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
                 <StarIcon className="h-8 w-8 text-yellow-500" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Reviews</p>
-                  <p className="text-2xl font-bold text-gray-900">{reviews.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{reviewStats.total_reviews}</p>
+                  <p className="text-sm text-gray-500">Avg: {reviewStats.average_rating}⭐</p>
                 </div>
               </div>
             </CardContent>
@@ -249,8 +279,11 @@ export default function Reviews() {
                 <CheckCircleIcon className="h-8 w-8 text-green-500" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Positive Reviews</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {reviews.filter(r => r.is_positive).length}
+                  <p className="text-2xl font-bold text-gray-900">{reviewStats.positive_reviews}</p>
+                  <p className="text-sm text-gray-500">
+                    {reviewStats.total_reviews > 0 
+                      ? Math.round((reviewStats.positive_reviews / reviewStats.total_reviews) * 100)
+                      : 0}% of total
                   </p>
                 </div>
               </div>
@@ -260,12 +293,11 @@ export default function Reviews() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <ClockIcon className="h-8 w-8 text-yellow-500" />
+                <GiftIcon className="h-8 w-8 text-purple-500" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Pending Response</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {reviews.filter(r => r.status === 'pending').length}
-                  </p>
+                  <p className="text-sm font-medium text-gray-600">Referrals Sent</p>
+                  <p className="text-2xl font-bold text-gray-900">{referralStats.total_referrals_sent}</p>
+                  <p className="text-sm text-gray-500">{referralStats.total_conversions} conversions</p>
                 </div>
               </div>
             </CardContent>
@@ -274,10 +306,11 @@ export default function Reviews() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <UserGroupIcon className="h-8 w-8 text-blue-500" />
+                <ChartBarIcon className="h-8 w-8 text-blue-500" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Referral Requests</p>
-                  <p className="text-2xl font-bold text-gray-900">{referralRequests.length}</p>
+                  <p className="text-sm font-medium text-gray-600">Conversion Rate</p>
+                  <p className="text-2xl font-bold text-gray-900">{referralStats.conversion_rate}%</p>
+                  <p className="text-sm text-gray-500">${referralStats.total_rewards_given} rewards given</p>
                 </div>
               </div>
             </CardContent>

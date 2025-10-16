@@ -55,6 +55,38 @@ export default function Calendar() {
     }
   }
 
+  // const handleServiceComplete = async (bookingId: string, notes: string) => {
+  //   try {
+  //     const { data: { user } } = await supabase.auth.getUser()
+  //     if (!user) return
+
+  //     const response = await fetch('http://localhost:3001/api/bookings/complete', {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         booking_id: bookingId,
+  //         user_id: user.id,
+  //         service_notes: notes
+  //       })
+  //     })
+
+  //     if (!response.ok) {
+  //       const errorData = await response.json()
+  //       throw new Error(errorData.error || 'Failed to complete service')
+  //     }
+
+  //     // Refresh bookings to show updated status
+  //     await fetchBookings()
+      
+  //     console.log('Service completed successfully')
+  //   } catch (error) {
+  //     console.error('Error completing service:', error)
+  //     throw error
+  //   }
+  // }
+
   const fetchCalendarEvents = async () => {
     try {
       setLoading(true)

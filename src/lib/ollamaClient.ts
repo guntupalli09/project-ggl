@@ -41,11 +41,17 @@ export async function getAvailableModels() {
 
 export async function generateText(prompt: string, model = DEFAULT_MODEL) {
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+
     const res = await fetch("http://localhost:11434/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, prompt, stream: true }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId)
 
     const reader = res.body?.getReader();
     if (!reader) {
@@ -77,6 +83,10 @@ export async function generateText(prompt: string, model = DEFAULT_MODEL) {
 
     return result;
   } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      console.error("Ollama request timeout", err);
+      return "AI request timed out. Please try again.";
+    }
     console.error("Ollama error", err);
     return "AI error occurred.";
   }

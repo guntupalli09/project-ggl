@@ -4,34 +4,26 @@ import { useTheme } from '../hooks/useTheme'
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
+  isMobile?: boolean
+  isTablet?: boolean
 }
 
 const navigation = [
   {
-    name: 'Dashboard',
-    href: '/dashboard',
-    icon: (props: any) => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" />
-      </svg>
-    )
-  },
-  {
-    name: 'Leads',
-    href: '/leads',
-    icon: (props: any) => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-      </svg>
-    )
-  },
-  {
-    name: 'CRM',
-    href: '/crm',
+    name: 'Analytics',
+    href: '/analytics',
     icon: (props: any) => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Contacts',
+    href: '/contacts',
+    icon: (props: any) => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
     )
   },
@@ -54,15 +46,6 @@ const navigation = [
     )
   },
   {
-    name: 'Business Performance',
-    href: '/business-performance',
-    icon: (props: any) => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    )
-  },
-  {
     name: 'Reviews',
     href: '/reviews',
     icon: (props: any) => (
@@ -72,16 +55,7 @@ const navigation = [
     )
   },
   {
-    name: 'Daily Growth',
-    href: '/daily-growth',
-    icon: (props: any) => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-      </svg>
-    )
-  },
-  {
-    name: 'Social Automation',
+    name: 'Social Media',
     href: '/social-automation',
     icon: (props: any) => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
@@ -129,25 +103,26 @@ const navigation = [
   }
 ]
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, isMobile = false, isTablet = false }: SidebarProps) {
   const location = useLocation()
   const { toggleTheme, isDark } = useTheme()
 
   return (
     <>
       {/* Mobile backdrop */}
-      {isOpen && (
+      {isOpen && (isMobile || isTablet) && (
         <div 
-          className="fixed inset-0 bg-gray-600 bg-opacity-75 z-40 lg:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-gray-600 bg-opacity-75 z-40 transition-opacity duration-300"
           onClick={onClose}
         />
       )}
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 shadow-xl transform transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 shadow-xl transform transition-all duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static lg:inset-0 lg:shadow-lg
+        lg:translate-x-0 lg:static lg:inset-0 lg:shadow-lg lg:border-r lg:border-gray-200 lg:dark:border-gray-700
+        ${isTablet ? 'w-56' : ''}
       `}>
         <div className="flex flex-col h-full">
           {/* Logo */}
@@ -189,7 +164,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          <nav className={`flex-1 px-2 py-4 space-y-1 overflow-y-auto ${isTablet ? 'px-1' : ''}`}>
             {navigation.map((item) => {
               const isActive = location.pathname === item.href
               return (
@@ -198,22 +173,24 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   to={item.href}
                   onClick={onClose}
                   className={`
-                    group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
+                    group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out
                     ${isActive
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 shadow-sm border border-indigo-200 dark:border-indigo-700'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 transform scale-105'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white hover:shadow-md hover:scale-102'
                     }
+                    ${isTablet ? 'px-2 py-2' : ''}
                   `}
                 >
                   <span className={`
                     mr-3 flex-shrink-0 transition-colors duration-200
-                    ${isActive ? 'text-indigo-500 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-400'}
+                    ${isActive ? 'text-white' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-400'}
+                    ${isTablet ? 'mr-2' : ''}
                   `}>
                     {item.icon({})}
                   </span>
-                  <span className="truncate">{item.name}</span>
+                  <span className={`truncate ${isTablet ? 'text-xs' : ''}`}>{item.name}</span>
                   {isActive && (
-                    <div className="ml-auto w-2 h-2 bg-indigo-500 rounded-full"></div>
+                    <div className="ml-auto w-2 h-2 bg-white rounded-full shadow-sm"></div>
                   )}
                 </Link>
               )

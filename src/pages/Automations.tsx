@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { isGuestUser, getCurrentUser } from '../lib/authUtils'
 import AutomationHistory from '../components/AutomationHistory'
+import ResponsivePageWrapper from '../components/ResponsivePageWrapper'
 import {
   CogIcon,
   ClockIcon,
   CheckCircleIcon,
   PlayIcon,
-  PauseIcon
+  PauseIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
 
 interface Automation {
@@ -16,6 +18,29 @@ interface Automation {
   delay_minutes: number
   active: boolean
   created_at: string
+}
+
+interface WorkflowAutomation {
+  id: string
+  niche_template_id: string
+  trigger_event: string | null
+  delay_minutes: number | null
+  action_type: string
+  is_active: boolean
+  created_at: string
+  niche_templates?: {
+    display_name: string
+    name: string
+  }
+}
+
+interface AutomationLog {
+  id: string
+  action_type: string | null
+  executed_at: string
+  status: 'success' | 'failed' | 'pending'
+  error_message?: string
+  data: any
 }
 
 interface AutomationStats {
@@ -29,6 +54,8 @@ export default function Automations() {
   const [loading, setLoading] = useState(true)
   const [isGuest, setIsGuest] = useState(false)
   const [automations, setAutomations] = useState<Automation[]>([])
+  const [workflowAutomations, setWorkflowAutomations] = useState<WorkflowAutomation[]>([])
+  const [logs, setLogs] = useState<AutomationLog[]>([])
   const [stats, setStats] = useState<AutomationStats>({
     lastRunTime: null,
     messagesSentToday: 0,
@@ -36,6 +63,7 @@ export default function Automations() {
   })
   const [automationsLoading, setAutomationsLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState('automations')
 
   // Fetch automations and stats
   const fetchAutomations = async () => {
@@ -148,6 +176,73 @@ export default function Automations() {
     }
   }
 
+  // Fetch workflow automations (system-generated)
+  const fetchWorkflowAutomations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('workflow_automations')
+        .select(`
+          *,
+          niche_templates(display_name, name)
+        `)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching workflow automations:', error)
+        return
+      }
+
+      setWorkflowAutomations(data || [])
+    } catch (error) {
+      console.error('Error fetching workflow automations:', error)
+    }
+  }
+
+  // Fetch automation logs
+  const fetchLogs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('automation_logs')
+        .select('*')
+        .order('executed_at', { ascending: false })
+        .limit(50)
+
+      if (error) {
+        console.error('Error fetching logs:', error)
+        return
+      }
+
+      setLogs(data || [])
+    } catch (error) {
+      console.error('Error fetching logs:', error)
+    }
+  }
+
+  // Toggle workflow automation
+  const toggleWorkflowAutomation = async (automationId: string, currentStatus: boolean) => {
+    try {
+      setUpdating(automationId)
+      
+      const { error } = await supabase
+        .from('workflow_automations')
+        .update({ is_active: !currentStatus })
+        .eq('id', automationId)
+
+      if (error) {
+        console.error('Error toggling workflow automation:', error)
+        return
+      }
+
+      // Refresh the list
+      await fetchWorkflowAutomations()
+    } catch (error) {
+      console.error('Error toggling workflow automation:', error)
+    } finally {
+      setUpdating(null)
+    }
+  }
+
   // Toggle automation active status
   const toggleAutomation = async (automationId: string, currentStatus: boolean) => {
     try {
@@ -180,7 +275,10 @@ export default function Automations() {
   }
 
   // Format delay minutes to human readable
-  const formatDelay = (minutes: number) => {
+  const formatDelay = (minutes: number | null | undefined) => {
+    if (!minutes || minutes < 0) {
+      return 'No delay'
+    }
     if (minutes < 60) {
       return `${minutes} minutes`
     } else if (minutes < 1440) {
@@ -223,9 +321,11 @@ export default function Automations() {
         return
       }
 
-      // Fetch automations only if user is authenticated (not guest)
+      // Fetch all automation data only if user is authenticated (not guest)
       if (!isGuestUser()) {
         fetchAutomations()
+        fetchWorkflowAutomations()
+        fetchLogs()
       }
     }
 
@@ -242,6 +342,8 @@ export default function Automations() {
           setIsGuest(false)
           if (session?.user) {
             fetchAutomations()
+            fetchWorkflowAutomations()
+            fetchLogs()
           }
         }
       }
@@ -252,7 +354,7 @@ export default function Automations() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+      <div className="h-full bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -262,21 +364,20 @@ export default function Automations() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <CogIcon className="h-8 w-8 text-indigo-600 dark:text-indigo-400 mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Automations</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700 dark:text-gray-300">
-                Welcome, {user?.email}
-              </span>
-            </div>
-          </div>
+    <ResponsivePageWrapper
+      title="Automations"
+      description="Manage your automated workflows and follow-up sequences"
+    >
+      {/* Header Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex items-center">
+          <CogIcon className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600 dark:text-indigo-400 mr-3" />
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Automations</h2>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+          <span className="text-sm text-gray-700 dark:text-gray-300">
+            Welcome, {user?.email}
+          </span>
         </div>
       </div>
 
@@ -367,12 +468,60 @@ export default function Automations() {
             </div>
           </div>
 
-          {/* Automations List */}
-          <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Active Automations</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Manage your automated follow-up sequences</p>
+          {/* Tab Navigation */}
+          <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden mb-8">
+            <div className="border-b border-gray-200 dark:border-gray-700">
+              <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                <button
+                  onClick={() => setActiveTab('automations')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'automations'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Custom Automations
+                  <span className="ml-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 py-0.5 px-2.5 rounded-full text-xs">
+                    {automations.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('workflows')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'workflows'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Business Workflows
+                  <span className="ml-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 py-0.5 px-2.5 rounded-full text-xs">
+                    {workflowAutomations.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('logs')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'logs'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Execution Logs
+                  <span className="ml-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 py-0.5 px-2.5 rounded-full text-xs">
+                    {logs.length}
+                  </span>
+                </button>
+              </nav>
             </div>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'automations' && (
+            <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Custom Automations</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Create and manage your own follow-up sequences</p>
+              </div>
             
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {automationsLoading ? (
@@ -435,8 +584,145 @@ export default function Automations() {
                 ))
               )}
             </div>
-          </div>
+            </div>
+          )}
 
+          {/* Workflow Automations Tab */}
+          {activeTab === 'workflows' && (
+            <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Business Workflows</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Pre-built automations for your business niche</p>
+              </div>
+              
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {workflowAutomations.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <div className="text-gray-400 text-6xl mb-4">⚙️</div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      No Workflows Found
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                      Business workflows are automatically created based on your niche selection.
+                    </p>
+                  </div>
+                ) : (
+                  workflowAutomations.map((automation) => (
+                    <div key={automation.id} className="px-6 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                              {automation.action_type ? automation.action_type.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase()) : 'Unknown Action'}
+                            </h3>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                              {automation.niche_templates?.display_name || 'Unknown Niche'}
+                            </span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              Trigger: {automation.trigger_event ? automation.trigger_event.replace(/_/g, ' ') : 'Manual'}
+                            </span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              Delay: {formatDelay(automation.delay_minutes)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            automation.is_active
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                          }`}>
+                            {automation.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                          <button
+                            onClick={() => toggleWorkflowAutomation(automation.id, automation.is_active)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              automation.is_active
+                                ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900'
+                                : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900'
+                            }`}
+                            disabled={updating === automation.id}
+                          >
+                            {updating === automation.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                            ) : automation.is_active ? (
+                              <PauseIcon className="h-4 w-4" />
+                            ) : (
+                              <PlayIcon className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Execution Logs Tab */}
+          {activeTab === 'logs' && (
+            <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Execution Logs</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Recent automation executions and their status</p>
+              </div>
+              
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {logs.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <div className="text-gray-400 text-6xl mb-4">📊</div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      No Execution Logs
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Execution logs will appear here when automations run.
+                    </p>
+                  </div>
+                ) : (
+                  logs.map((log) => (
+                    <div key={log.id} className="px-6 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                              {log.action_type ? log.action_type.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase()) : 'Unknown Action'}
+                            </h3>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              log.status === 'success'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                : log.status === 'failed'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                            }`}>
+                              {log.status}
+                            </span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              {new Date(log.executed_at).toLocaleString()}
+                            </span>
+                          </div>
+                          {log.error_message && (
+                            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                              Error: {log.error_message}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center">
+                          {log.status === 'success' ? (
+                            <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                          ) : log.status === 'failed' ? (
+                            <ExclamationTriangleIcon className="h-5 w-5 text-red-500" />
+                          ) : (
+                            <ClockIcon className="h-5 w-5 text-yellow-500" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Automation History */}
           {user && !isGuest && (
@@ -473,6 +759,6 @@ export default function Automations() {
           </div>
         </div>
       </main>
-    </div>
+    </ResponsivePageWrapper>
   )
 }

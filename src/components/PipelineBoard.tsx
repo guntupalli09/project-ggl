@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import { Droppable, Draggable } from 'react-beautiful-dnd'
 import { Lead } from '../hooks/useLeads'
 import {
   ClockIcon,
@@ -26,10 +26,14 @@ interface Contact {
 type ContactOrLead = Lead | Contact
 
 interface PipelineBoardProps {
-  contacts: ContactOrLead[] | undefined
-  onContactUpdate: () => Promise<void>
-  onEditContact: (contact: ContactOrLead) => void
-  onDeleteContact: (id: string) => Promise<void>
+  contacts?: ContactOrLead[] | undefined
+  leads?: ContactOrLead[] | undefined
+  onContactUpdate?: () => Promise<void>
+  onUpdateLead?: (id: string, updates: Partial<Lead>) => Promise<void>
+  onUpdateContact?: (id: string, updates: Partial<Contact>) => void
+  onEditContact?: (contact: ContactOrLead) => void
+  onDeleteContact?: (id: string) => Promise<void>
+  prefix?: string // Add prefix to make droppable IDs unique
 }
 
 interface Column {
@@ -71,19 +75,22 @@ const columns: Column[] = [
   }
 ]
 
-export default function PipelineBoard({ contacts, onContactUpdate }: PipelineBoardProps) {
+export default function PipelineBoard({ contacts, leads, prefix = '' }: PipelineBoardProps) {
   const [leadsByStatus, setLeadsByStatus] = useState<Record<string, ContactOrLead[]>>({})
+
+  // Use either contacts or leads, prioritizing contacts
+  const data = contacts || leads
 
   // Group leads by status
   useEffect(() => {
-    if (!contacts) {
-      console.log('PipelineBoard: contacts is undefined')
+    if (!data) {
+      console.log('PipelineBoard: data is undefined')
       setLeadsByStatus({})
       return
     }
     
-    console.log('PipelineBoard: contacts changed', contacts.length)
-    const grouped = contacts.reduce((acc, lead) => {
+    console.log('PipelineBoard: data changed', data.length)
+    const grouped = data.reduce((acc, lead) => {
       // Map Contact status to Lead status
       let mappedStatus = lead.status || 'new'
       if (lead.status === 'Prospect') mappedStatus = 'new'
@@ -107,10 +114,10 @@ export default function PipelineBoard({ contacts, onContactUpdate }: PipelineBoa
 
     console.log('PipelineBoard: grouped leads', grouped)
     setLeadsByStatus(grouped)
-  }, [contacts])
+  }, [data])
 
-  // Don't render if no contacts
-  if (!contacts || contacts.length === 0) {
+  // Don't render if no data
+  if (!data || data.length === 0) {
     return (
       <div className="text-center py-8">
         <p className="text-gray-500 dark:text-gray-400">No leads to display</p>
@@ -118,82 +125,6 @@ export default function PipelineBoard({ contacts, onContactUpdate }: PipelineBoa
     )
   }
 
-  const handleDragEnd = async (result: DropResult) => {
-    const { destination, source, draggableId } = result
-
-    console.log('Drag end result:', { destination, source, draggableId })
-    console.log('Available droppable IDs:', columns.map(col => col.id))
-
-    if (!destination) {
-      console.log('No destination, drag cancelled')
-      return
-    }
-
-    if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
-    ) {
-      return
-    }
-
-    const sourceColumn = columns.find(col => col.id === source.droppableId)
-    const destColumn = columns.find(col => col.id === destination.droppableId)
-
-    console.log('Source column:', sourceColumn)
-    console.log('Destination column:', destColumn)
-
-    if (!sourceColumn || !destColumn) {
-      console.error('Column not found:', { sourceColumn, destColumn })
-      return
-    }
-
-    // Find the contact being moved
-    if (!contacts) {
-      console.error('Contacts array is undefined')
-      return
-    }
-    
-    const contact = contacts.find(c => c.id === draggableId)
-    console.log('Found contact:', contact)
-    console.log('Available contacts:', contacts.map(c => c.id))
-    if (!contact) {
-      console.error('Contact not found:', draggableId)
-      return
-    }
-
-    // Update the contact's status
-    try {
-      console.log(`Updating contact ${contact.id} from ${sourceColumn.status} to ${destColumn.status}`)
-      
-      // Update the contact status in the local state first
-      setLeadsByStatus(prev => {
-        const newState = { ...prev }
-        
-        // Remove from source column
-        if (newState[sourceColumn.id]) {
-          newState[sourceColumn.id] = newState[sourceColumn.id].filter(c => c.id !== contact.id)
-        }
-        
-        // Add to destination column with updated status
-        if (!newState[destColumn.id]) {
-          newState[destColumn.id] = []
-        }
-        newState[destColumn.id].push({
-          ...contact,
-          status: destColumn.status as Lead['status'],
-          user_id: contact.user_id || ''
-        } as ContactOrLead)
-        
-        return newState
-      })
-      
-      // Trigger parent component refresh
-      await onContactUpdate()
-      console.log('Contact status updated successfully')
-    } catch (error) {
-      console.error('Error updating contact status:', error)
-    }
-  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -213,8 +144,7 @@ export default function PipelineBoard({ contacts, onContactUpdate }: PipelineBoa
         </p>
       </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {columns.map((column) => {
             const columnLeads = leadsByStatus[column.status] || []
             const IconComponent = column.icon
@@ -237,9 +167,10 @@ export default function PipelineBoard({ contacts, onContactUpdate }: PipelineBoa
                 </div>
 
                 {/* Droppable Area */}
-                <Droppable droppableId={column.id} key={`droppable-${column.id}`}>
+                <Droppable droppableId={`${prefix}${column.id}`} key={`droppable-${prefix}${column.id}`}>
                   {(provided, snapshot) => {
-                    console.log(`Droppable ${column.id} rendered, isDraggingOver: ${snapshot.isDraggingOver}`)
+                    const droppableId = `${prefix}${column.id}`
+                    console.log(`🎯 Droppable ${droppableId} rendered, isDraggingOver: ${snapshot.isDraggingOver}`)
                     return (
                     <div
                       ref={provided.innerRef}
@@ -321,7 +252,6 @@ export default function PipelineBoard({ contacts, onContactUpdate }: PipelineBoa
             )
           })}
         </div>
-      </DragDropContext>
     </div>
   )
 }

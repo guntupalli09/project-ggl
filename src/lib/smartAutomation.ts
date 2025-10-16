@@ -32,7 +32,7 @@ export async function findLeadsNeedingFollowUp(userId: string, automationDelayMi
         notes
       `)
       .eq('user_id', userId)
-      .in('status', ['new', 'contacted', 'no_response'])
+      .in('status', ['new', 'contacted'])
       .or(`last_outbound_message.is.null,last_outbound_message.lt.${cutoffTime}`)
 
     if (error) {
@@ -59,7 +59,7 @@ export async function findLeadsNeedingFollowUp(userId: string, automationDelayMi
         // Lead has responded, update their status
         await supabase
           .from('leads')
-          .update({ status: 'responded' })
+          .update({ status: 'contacted' })
           .eq('id', lead.id)
       }
     }

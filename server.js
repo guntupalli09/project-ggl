@@ -1165,12 +1165,249 @@ app.get('/api/google/places/reviews', async (req, res) => {
   }
 })
 
+// Niche Templates API
+app.get('/api/niche-templates', async (req, res) => {
+  try {
+    const { data: nicheTemplates, error } = await supabase
+      .from('niche_templates')
+      .select('*')
+
+    if (error) {
+      console.error('Error fetching niche templates:', error)
+      return res.status(500).json({ error: error.message })
+    }
+
+    res.status(200).json(nicheTemplates)
+  } catch (error) {
+    console.error('Unexpected error fetching niche templates:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Tenant Onboarding API
+app.post('/api/tenant/onboarding', async (req, res) => {
+  try {
+    const { userId, nicheTemplateId, customDomain, businessName } = req.body
+
+    if (!userId || !nicheTemplateId) {
+      return res.status(400).json({ error: 'userId and nicheTemplateId are required' })
+    }
+
+    // Generate business slug from business name
+    const generateBusinessSlug = (name) => {
+      if (!name) return null
+      return name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    }
+
+    // Update user_settings with the selected niche
+    const updateData = {
+      niche_template_id: nicheTemplateId,
+      updated_at: new Date().toISOString()
+    }
+    
+    // Add business name if provided
+    if (businessName) {
+      updateData.business_name = businessName
+      updateData.business_slug = generateBusinessSlug(businessName)
+    }
+    
+    // Add custom_domain if provided
+    if (customDomain) {
+      updateData.custom_domain = customDomain
+    }
+    
+    const { data, error } = await supabase
+      .from('user_settings')
+      .update(updateData)
+      .eq('user_id', userId)
+      .select()
+
+    if (error) {
+      console.error('Error updating user settings:', error)
+      return res.status(500).json({ error: error.message })
+    }
+
+    res.status(200).json({ success: true, data })
+  } catch (error) {
+    console.error('Unexpected error in onboarding:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Booking completion endpoint
+app.post('/api/bookings/complete', async (req, res) => {
+  try {
+    const { booking_id, user_id, service_notes } = req.body
+
+    // Validate required fields
+    if (!booking_id || !user_id) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: booking_id, user_id' 
+      })
+    }
+
+    // Update booking status to completed
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .update({
+        status: 'completed',
+        service_completed_at: new Date().toISOString(),
+        service_completed_by: user_id,
+        service_notes: service_notes || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', booking_id)
+      .eq('user_id', user_id)
+      .select(`
+        id,
+        customer_name,
+        customer_email,
+        customer_phone,
+        service,
+        booking_time,
+        user_id
+      `)
+      .single()
+
+    if (bookingError) {
+      console.error('Error updating booking:', bookingError)
+      return res.status(500).json({ 
+        error: 'Failed to complete booking',
+        details: bookingError.message 
+      })
+    }
+
+    if (!booking) {
+      console.error('No booking found with ID:', booking_id)
+      return res.status(404).json({ 
+        error: 'Booking not found',
+        details: `No booking found with ID: ${booking_id} for user: ${user_id}`
+      })
+    }
+
+    // Get business settings for workflow data
+    const { data: businessSettings } = await supabase
+      .from('user_settings')
+      .select('business_name, niche_template_id')
+      .eq('user_id', user_id)
+      .single()
+
+    // Prepare workflow data
+    const workflowData = {
+      booking_id: booking.id,
+      lead_id: null, // No lead relationship for now
+      user_id: booking.user_id,
+      business_name: businessSettings?.business_name || 'Our Business',
+      customer_name: booking.customer_name,
+      customer_email: booking.customer_email,
+      customer_phone: booking.customer_phone,
+      service_type: booking.service,
+      booking_time: booking.booking_time,
+      service_notes: service_notes
+    }
+
+    // Trigger post-service workflow
+    try {
+          // Import and use the actual workflow engine
+          const { workflowEngine } = await import('./src/lib/workflowEngine.js')
+      
+      // Trigger the booking completed workflow
+      await workflowEngine.triggerWorkflow('booking_completed', workflowData)
+      
+      console.log(`✅ Service completed and workflow triggered for booking ${booking_id}`)
+    } catch (workflowError) {
+      console.error('Error triggering workflow:', workflowError)
+      // Don't fail the booking completion if workflow fails
+    }
+
+    // Log the completion
+    console.log(`Service completed:`, {
+      booking_id: booking.id,
+      customer: booking.customer_name,
+      service: booking.service,
+      completed_by: user_id
+    })
+
+    return res.status(200).json({
+      success: true,
+      message: 'Service completed successfully',
+      booking: {
+        id: booking.id,
+        status: 'completed',
+        service_completed_at: booking.service_completed_at
+      }
+    })
+
+  } catch (error) {
+    console.error('Error in booking completion:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+})
+
+// Test endpoint to create a booking for testing
+app.post('/api/test/create-booking', async (req, res) => {
+  try {
+    const { user_id } = req.body
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id is required' })
+    }
+
+    // Create a test booking
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .insert({
+        user_id: user_id,
+        customer_name: 'Test Customer',
+        customer_email: 'test@example.com',
+        customer_phone: '555-1234',
+        service: 'Test Service',
+        booking_time: new Date().toISOString(),
+        duration_minutes: 60,
+        status: 'confirmed',
+        notes: 'Test booking for completion testing'
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating test booking:', error)
+      return res.status(500).json({ error: error.message })
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      booking: booking,
+      message: 'Test booking created successfully'
+    })
+  } catch (error) {
+    console.error('Error in test booking creation:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() })
 })
 
-app.listen(PORT, () => {
+// Initialize workflow engine
+async function initializeWorkflowEngine() {
+  try {
+    const { workflowEngine } = await import('./src/lib/workflowEngine.js')
+    await workflowEngine.initialize()
+  } catch (error) {
+    console.error('Error initializing workflow engine:', error)
+  }
+}
+
+app.listen(PORT, async () => {
   console.log(`🚀 Development API server running on http://localhost:${PORT}`)
   console.log(`📱 Frontend should be running on http://localhost:5173`)
   console.log(`🔗 API endpoints available at http://localhost:${PORT}/api/`)
+  
+  // Initialize workflow engine
+  await initializeWorkflowEngine()
 })

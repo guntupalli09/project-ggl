@@ -4,6 +4,7 @@ import { getCurrentUser } from '../lib/authUtils'
 import { generateText, checkOllamaStatus, DEFAULT_MODEL } from '../lib/ollamaClient'
 import { postToPlatform, isTokenExpired, refreshAccessToken } from '../lib/socialOAuth'
 import { isLinkedInConnected, getLinkedInSession } from '../lib/linkedinOAuth'
+import { getBrandVoice, formatBrandVoiceForPrompt } from '../lib/brandVoice'
 
 interface PostData {
   platform: 'linkedin' | 'facebook' | 'instagram'
@@ -142,7 +143,11 @@ export default function AISocialPostGenerator() {
     setSuccess('')
 
     try {
-      const prompt = `Write a ${formData.tone} ${formData.platform} post promoting ${formData.topic}. Make it engaging and concise. The post should be appropriate for ${formData.platform} and match the ${formData.tone} tone. Keep it under 280 characters for optimal social media engagement.`
+      // Get brand voice
+      const brandVoice = await getBrandVoice()
+      const brandVoicePrompt = formatBrandVoiceForPrompt(brandVoice)
+
+      const prompt = `Write a ${formData.tone} ${formData.platform} post promoting ${formData.topic}. Make it engaging and concise. The post should be appropriate for ${formData.platform} and match the ${formData.tone} tone. Keep it under 280 characters for optimal social media engagement.${brandVoicePrompt}`
 
       console.log('Generating social media post with Ollama model:', DEFAULT_MODEL)
       console.log('Prompt:', prompt)

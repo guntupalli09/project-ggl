@@ -6,7 +6,8 @@ import { useTheme } from '../hooks/useTheme'
 import { clearLinkedInSession } from '../lib/linkedinOAuth'
 import QRCodeGenerator from '../components/QRCodeGenerator'
 import GooglePlaceIdFinder from '../components/GooglePlaceIdFinder'
-import { PageHeader } from '../components/ui/PageHeader'
+import UserNicheDisplay from '../components/UserNicheDisplay'
+import ResponsivePageWrapper from '../components/ResponsivePageWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -240,13 +241,10 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <PageHeader
-          title="Profile Settings"
-          subtitle="Manage your account information and preferences"
-        />
+    <ResponsivePageWrapper
+      title="Profile Settings"
+      description="Manage your account information and preferences"
+    >
 
         {/* Success/Error Messages */}
         {success && (
@@ -396,6 +394,34 @@ export default function Profile() {
                     </Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Business Configuration */}
+            <UserNicheDisplay />
+
+            {/* Onboarding Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <div className="p-2 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg mr-3">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                  </div>
+                  Onboarding Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Complete your business setup to unlock all features and customize your workflows.
+                  </p>
+                  <Button
+                    onClick={() => navigate('/onboarding')}
+                    className="w-full"
+                  >
+                    Complete Business Setup
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -623,7 +649,6 @@ export default function Profile() {
             </Card>
           </div>
         </div>
-      </div>
 
       {/* QR Code Modal */}
       {showQRCode && (
@@ -658,6 +683,6 @@ export default function Profile() {
           </div>
         </div>
       )}
-    </div>
+    </ResponsivePageWrapper>
   )
 }

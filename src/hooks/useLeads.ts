@@ -97,9 +97,24 @@ export const useLeads = () => {
     try {
       setError(null)
 
+      // Validate and normalize status if provided
+      const normalizedUpdates = { ...updates }
+      if (updates.status) {
+        const allowedStatuses = ['new', 'contacted', 'responded', 'no_response', 'booked', 'completed']
+        const normalizedStatus = updates.status.trim().toLowerCase()
+        
+        if (!allowedStatuses.includes(normalizedStatus)) {
+          console.error('Invalid lead status:', updates.status, 'Normalized:', normalizedStatus)
+          throw new Error(`Invalid lead status: ${updates.status}. Must be one of: ${allowedStatuses.join(', ')}`)
+        }
+        
+        normalizedUpdates.status = normalizedStatus as Lead['status']
+        console.log('Updating lead status:', { id, original: updates.status, normalized: normalizedStatus })
+      }
+
       const { data, error } = await supabase
         .from('leads')
-        .update(updates)
+        .update(normalizedUpdates)
         .eq('id', id)
         .select()
         .single()

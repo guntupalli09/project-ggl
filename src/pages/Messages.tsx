@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useCleanup } from '../lib/apiUtils'
 import { supabase } from '../lib/supabaseClient'
 import { googleCalendarAuth } from '../lib/googleCalendarAuth'
 import { 
@@ -25,6 +26,7 @@ interface Message {
 }
 
 export default function Messages() {
+  const cleanup = useCleanup()
   const [isConnected, setIsConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -89,16 +91,16 @@ export default function Messages() {
   // Auto-refresh every 10 seconds
   useEffect(() => {
     if (isConnected) {
-      const interval = setInterval(() => {
+      const interval = cleanup.setInterval(() => {
         fetchConversations()
         if (selectedConversation) {
           fetchMessages(selectedConversation)
         }
       }, 10000)
 
-      return () => clearInterval(interval)
+      return () => cleanup.clearInterval(interval)
     }
-  }, [isConnected, selectedConversation])
+  }, [isConnected, selectedConversation, cleanup])
 
   const checkConnectionStatus = async () => {
     try {
