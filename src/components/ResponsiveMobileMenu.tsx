@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import Logo from './Logo'
 
 interface ResponsiveMobileMenuProps {
   isOpen: boolean
@@ -167,11 +168,7 @@ export default function ResponsiveMobileMenu({ isOpen, onClose }: ResponsiveMobi
           {/* Header */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
+              <Logo size="sm" showSparkle={false} className="flex-shrink-0" />
               <span className="ml-3 text-lg font-bold text-gray-900 dark:text-white">GetGetLeads</span>
             </div>
             <button

@@ -3,6 +3,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ToastNotification from './ToastNotification'
+import Logo from './Logo'
 
 interface SidebarProps {
   isOpen: boolean
@@ -196,11 +197,7 @@ export default function Sidebar({ isOpen, onClose, isMobile = false, isTablet = 
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div className="flex items-center min-w-0">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
+              <Logo size="sm" showSparkle={false} className="flex-shrink-0" />
               <div className="ml-3 min-w-0 flex-1">
                 <div className="text-lg font-bold text-gray-900 dark:text-white truncate">
                   GetGetLeads
