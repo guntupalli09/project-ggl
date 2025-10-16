@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { isGuestUser, getCurrentUser, clearGuestSession } from '../lib/authUtils'
-import { useTheme } from '../hooks/useTheme'
-import { clearLinkedInSession } from '../lib/linkedinOAuth'
+import { getCurrentUser } from '../lib/authUtils'
 import QRCodeGenerator from '../components/QRCodeGenerator'
 import GooglePlaceIdFinder from '../components/GooglePlaceIdFinder'
 import UserNicheDisplay from '../components/UserNicheDisplay'
@@ -17,10 +15,6 @@ import {
   PhoneIcon, 
   CogIcon,
   QrCodeIcon,
-  SunIcon,
-  MoonIcon,
-  SparklesIcon,
-  ShieldCheckIcon,
   ExclamationTriangleIcon,
   MapPinIcon,
   XMarkIcon
@@ -44,7 +38,6 @@ export default function Profile() {
   const [success, setSuccess] = useState('')
   const [editing, setEditing] = useState(false)
   const [showQRCode, setShowQRCode] = useState(false)
-  const { toggleTheme, isDark } = useTheme()
   const [formData, setFormData] = useState({
     business_name: '',
     booking_link: '',
@@ -205,45 +198,6 @@ export default function Profile() {
     setTimeout(() => setSuccess(''), 5000)
   }
 
-  const handleLogout = async () => {
-    try {
-      console.log('🚪 Profile handleLogout called')
-      
-      // Clear LinkedIn session
-      clearLinkedInSession()
-      
-      // Clear guest session if applicable
-      if (isGuestUser()) {
-        console.log('🚪 Clearing guest session')
-        clearGuestSession()
-      }
-      
-      // Sign out from Supabase
-      console.log('🚪 Signing out from Supabase')
-      const { error: signOutError } = await supabase.auth.signOut()
-      
-      if (signOutError) {
-        console.error('❌ Supabase signOut error:', signOutError)
-        setError(`Logout failed: ${signOutError.message}`)
-        return
-      }
-      
-      console.log('✅ Successfully signed out, navigating to login')
-      // Redirect to login
-      navigate('/login')
-    } catch (error) {
-      console.error('❌ Error logging out:', error)
-      setError(`Logout failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
 
   if (loading) {
     return (
@@ -537,106 +491,63 @@ export default function Profile() {
             </Card>
           </div>
 
-          {/* Right Column - Account Info & Settings */}
+          {/* Right Column - Quick Actions */}
           <div className="space-y-6">
-            {/* Account Info */}
+            {/* Quick Actions */}
             <Card>
               <CardHeader>
                 <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg mr-3">
-                    <ShieldCheckIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg mr-3">
+                    <CogIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
                   </div>
-                  <CardTitle>Account Info</CardTitle>
+                  <CardTitle>Quick Actions</CardTitle>
                 </div>
+                <CardDescription>Manage your account and preferences</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Plan Type</span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white capitalize bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">{user.plan_type}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Member Since</span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(user.created_at)}</span>
-                  </div>
-                  {user.is_guest && (
-                    <Alert variant="warning">
-                      You are exploring in guest mode. Your data won't be saved permanently.
-                    </Alert>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Upgrade to Premium */}
-            <Card className="bg-gradient-to-r from-purple-600 to-blue-600 border-0 text-white">
-              <CardContent className="text-center">
-                <div className="p-3 bg-white/20 rounded-full w-fit mx-auto mb-4">
-                  <SparklesIcon className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Upgrade to Premium</h3>
-                <p className="text-sm text-purple-100 mb-6">Unlock advanced features and unlimited usage</p>
-                <Button className="w-full bg-white text-purple-600 hover:bg-gray-100">
-                  Upgrade Now
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Appearance */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg mr-3">
-                    <CogIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                  </div>
-                  <CardTitle>Appearance</CardTitle>
-                </div>
-                <CardDescription>Choose your preferred theme</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg mr-3">
-                      {isDark ? (
-                        <MoonIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                      ) : (
-                        <SunIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                      )}
-                    </div>
-                    <div>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">Theme</span>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {isDark ? 'Dark mode' : 'Light mode'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={toggleTheme}
-                    className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 dark:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <div className="space-y-3">
+                  <Button
+                    onClick={() => navigate('/settings')}
+                    variant="outline"
+                    className="w-full justify-start"
+                    leftIcon={<CogIcon className="h-4 w-4" />}
                   >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        isDark ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
+                    Account Settings
+                  </Button>
+                  <Button
+                    onClick={() => navigate('/onboarding')}
+                    variant="outline"
+                    className="w-full justify-start"
+                    leftIcon={<ExclamationTriangleIcon className="h-4 w-4" />}
+                  >
+                    Complete Setup
+                  </Button>
                 </div>
               </CardContent>
             </Card>
 
-
-            {/* Sign Out */}
-            <Card>
-              <CardContent>
-                <Button
-                  onClick={handleLogout}
-                  variant="danger"
-                  className="w-full"
-                >
-                  Sign Out
-                </Button>
-              </CardContent>
-            </Card>
+            {/* Guest Mode Warning */}
+            {user.is_guest && (
+              <Alert variant="warning">
+                <div className="flex items-start">
+                  <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                      Guest Mode
+                    </h3>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                      You are exploring in guest mode. Your data won't be saved permanently. 
+                      <button 
+                        onClick={() => navigate('/login')}
+                        className="underline hover:no-underline ml-1"
+                      >
+                        Sign in to save your progress.
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              </Alert>
+            )}
           </div>
         </div>
 
