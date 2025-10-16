@@ -49,12 +49,12 @@ export default function Profile() {
     business_name: '',
     booking_link: '',
     business_slug: '',
-    twilio_phone_number: '',
     business_phone: '',
     missed_call_automation_enabled: false,
     google_place_id: '',
     business_address: '',
-    business_website: ''
+    business_website: '',
+    business_hours: ''
   })
   const [showPlaceIdFinder, setShowPlaceIdFinder] = useState(false)
   const navigate = useNavigate()
@@ -107,12 +107,12 @@ export default function Profile() {
           business_name: settings.business_name || currentUser.company || '',
           booking_link: settings.booking_link || '',
           business_slug: settings.business_slug || '',
-          twilio_phone_number: settings.twilio_phone_number || '',
           business_phone: settings.business_phone || '',
           missed_call_automation_enabled: settings.missed_call_automation_enabled || false,
           google_place_id: settings.google_place_id || '',
           business_address: settings.business_address || '',
-          business_website: settings.business_website || ''
+          business_website: settings.business_website || '',
+          business_hours: settings.business_hours || ''
         })
       } else {
         // No settings found, use defaults
@@ -121,12 +121,12 @@ export default function Profile() {
           business_name: currentUser.company || '',
           booking_link: '',
           business_slug: '',
-          twilio_phone_number: '',
           business_phone: '',
           missed_call_automation_enabled: false,
           google_place_id: '',
           business_address: '',
-          business_website: ''
+          business_website: '',
+          business_hours: ''
         })
       }
 
@@ -164,12 +164,12 @@ export default function Profile() {
           business_name: formData.business_name,
           booking_link: formData.booking_link,
           business_slug: businessSlug,
-          twilio_phone_number: formData.twilio_phone_number,
           business_phone: formData.business_phone,
           missed_call_automation_enabled: formData.missed_call_automation_enabled,
           google_place_id: formData.google_place_id,
           business_address: formData.business_address,
-          business_website: formData.business_website
+          business_website: formData.business_website,
+          business_hours: formData.business_hours
         }, {
           onConflict: 'user_id'
         })
@@ -374,6 +374,17 @@ export default function Profile() {
                     placeholder="123 Main St, City, State 12345"
                   />
 
+                  {/* Business Hours */}
+                  <Input
+                    type="text"
+                    label="Business Hours"
+                    value={formData.business_hours}
+                    onChange={(e) => setFormData({ ...formData, business_hours: e.target.value })}
+                    disabled={!editing}
+                    placeholder="Mon-Fri 9am–6pm, Sat 10am–4pm, Sun Closed"
+                    helperText="Shown in missed-call SMS. Keep it concise."
+                  />
+
                   {/* Business Website */}
                   <Input
                     type="url"
@@ -488,19 +499,11 @@ export default function Profile() {
                   <CardTitle>Missed Call Automation</CardTitle>
                 </div>
                 <CardDescription>
-                  Automatically send SMS to missed callers
+                  Automatically send follow-up messages to missed callers via Google Business Profile
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input
-                    type="tel"
-                    label="Twilio Phone Number"
-                    value={formData.twilio_phone_number}
-                    onChange={(e) => setFormData({ ...formData, twilio_phone_number: e.target.value })}
-                    disabled={!editing}
-                    placeholder="+1234567890"
-                  />
                   <Input
                     type="tel"
                     label="Your Phone Number (for alerts)"
@@ -513,8 +516,8 @@ export default function Profile() {
 
                 <div className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Enable missed call SMS automation</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Automatically send SMS to missed callers</p>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Enable missed call automation</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Automatically send follow-up messages to missed callers via Google Business Profile</p>
                   </div>
                   <button
                     onClick={() => setFormData({ ...formData, missed_call_automation_enabled: !formData.missed_call_automation_enabled })}
@@ -530,46 +533,6 @@ export default function Profile() {
                     />
                   </button>
                 </div>
-
-                {/* Twilio Webhook URL Section */}
-                {formData.missed_call_automation_enabled && (
-                  <div className="mt-6 p-5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">Webhook URL for Twilio</h4>
-                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
-                      Configure this URL in your Twilio phone number settings:
-                    </p>
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="text"
-                        value="https://www.getgetleads.com/api/twilio/incoming-call"
-                        readOnly
-                        className="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded-lg text-sm font-mono text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText('https://www.getgetleads.com/api/twilio/incoming-call')
-                          // You could add a toast notification here
-                        }}
-                        className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                    <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                        <strong>Setup Instructions:</strong>
-                      </p>
-                      <ol className="text-sm text-yellow-700 dark:text-yellow-300 mt-2 ml-4 list-decimal space-y-1">
-                        <li>Go to your Twilio Console</li>
-                        <li>Navigate to Phone Numbers → Manage → Active numbers</li>
-                        <li>Click on your phone number</li>
-                        <li>In the "Webhook" section, set the URL to the above webhook URL</li>
-                        <li>Set HTTP method to "POST"</li>
-                        <li>Save the configuration</li>
-                      </ol>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>

@@ -1,4 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabaseClient'
 
 interface ResponsiveMobileMenuProps {
   isOpen: boolean
@@ -6,6 +8,16 @@ interface ResponsiveMobileMenuProps {
 }
 
 const navigation = [
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
+    icon: (props: any) => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" />
+      </svg>
+    )
+  },
   {
     name: 'Analytics',
     href: '/analytics',
@@ -20,7 +32,7 @@ const navigation = [
     href: '/contacts',
     icon: (props: any) => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" />
       </svg>
     )
   },
@@ -34,26 +46,7 @@ const navigation = [
     )
   },
   {
-    name: 'Social Media',
-    href: '/social-automation',
-    icon: (props: any) => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m0 0V1a1 1 0 011-1h2a1 1 0 011 1v18a1 1 0 01-1 1H4a1 1 0 01-1-1V1a1 1 0 011-1h2a1 1 0 011 1v3m0 0H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2" />
-      </svg>
-    )
-  },
-  {
-    name: 'Automations',
-    href: '/automations',
-    icon: (props: any) => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    )
-  },
-  {
-    name: 'Messages',
+    name: 'Calls & Messages',
     href: '/messages',
     icon: (props: any) => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
@@ -67,6 +60,25 @@ const navigation = [
     icon: (props: any) => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Social Media',
+    href: '/social-automation',
+    icon: (props: any) => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Automations',
+    href: '/automations',
+    icon: (props: any) => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     )
   },
@@ -102,6 +114,42 @@ const navigation = [
 
 export default function ResponsiveMobileMenu({ isOpen, onClose }: ResponsiveMobileMenuProps) {
   const location = useLocation()
+  const [missedCallsCount, setMissedCallsCount] = useState(0)
+
+  // Check for missed calls
+  useEffect(() => {
+    const checkMissedCalls = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data: callLogs, error } = await supabase
+          .from('call_logs')
+          .select('id, call_type, call_time')
+          .eq('user_id', user.id)
+          .eq('call_type', 'missed')
+          .order('call_time', { ascending: false })
+          .limit(1)
+
+        if (error) {
+          console.error('Error checking missed calls:', error)
+          return
+        }
+
+        setMissedCallsCount(callLogs?.length || 0)
+      } catch (error) {
+        console.error('Error checking missed calls:', error)
+      }
+    }
+
+    // Check immediately
+    checkMissedCalls()
+
+    // Check every 30 seconds
+    const interval = setInterval(checkMissedCalls, 30000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   if (!isOpen) return null
 
@@ -160,6 +208,11 @@ export default function ResponsiveMobileMenu({ isOpen, onClose }: ResponsiveMobi
                     {item.icon({})}
                   </span>
                   <span className="truncate">{item.name}</span>
+                  {item.name === 'Calls & Messages' && missedCallsCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                      {missedCallsCount}
+                    </span>
+                  )}
                   {isActive && (
                     <div className="ml-auto w-2 h-2 bg-white rounded-full shadow-sm"></div>
                   )}

@@ -22,6 +22,8 @@ interface DashboardMetrics {
     conversionRate: number
     customerNames: string[]
   }[]
+  missedCalls: number
+  aiFollowupsSent: number
 }
 
 export default function Dashboard() {
@@ -52,8 +54,8 @@ export default function Dashboard() {
       startDate.setDate(startDate.getDate() - days)
       const startDateISO = startDate.toISOString()
 
-      // Fetch data for the 3 core metrics
-      const [leadsData, bookingsData, messagesData] = await Promise.all([
+      // Fetch data for the 5 core metrics
+      const [leadsData, bookingsData, messagesData, callLogsData] = await Promise.all([
         // All leads in time range
         supabase
           .from('leads')
@@ -74,16 +76,25 @@ export default function Dashboard() {
           .select('lead_id, direction, created_at, leads!inner(user_id, source)')
           .eq('leads.user_id', userId)
           .eq('direction', 'in')
+          .gte('created_at', startDateISO),
+
+        // All call logs in time range
+        supabase
+          .from('call_logs')
+          .select('call_type, ai_followup_sent, created_at')
+          .eq('user_id', userId)
           .gte('created_at', startDateISO)
       ])
 
       if (leadsData.error) throw leadsData.error
       if (bookingsData.error) throw bookingsData.error
       if (messagesData.error) throw messagesData.error
+      if (callLogsData.error) throw callLogsData.error
 
       const leads = leadsData.data || []
       const bookings = bookingsData.data || []
       const messages = messagesData.data || []
+      const callLogs = callLogsData.data || []
 
       // 1. Calculate Reply-to-Book Rate
       const leadsWithReplies = new Set(messages.map(m => m.lead_id))
@@ -130,10 +141,18 @@ export default function Dashboard() {
         customerNames: data.customerNames
       })).sort((a, b) => b.leads - a.leads)
 
+      // 4. Calculate Missed Calls
+      const missedCalls = callLogs.filter(call => call.call_type === 'missed').length
+
+      // 5. Calculate AI Follow-ups Sent
+      const aiFollowupsSent = callLogs.filter(call => call.ai_followup_sent).length
+
       setMetrics({
         replyToBookRate,
         weeklyBookings,
-        leadsConvertedToBookings
+        leadsConvertedToBookings,
+        missedCalls,
+        aiFollowupsSent
       })
 
     } catch (err) {
@@ -246,7 +265,7 @@ export default function Dashboard() {
         </div>
 
         {/* Core Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           {/* Reply-to-Book Rate */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -287,6 +306,34 @@ export default function Dashboard() {
               </div>
               <p className="text-sm text-muted-foreground mt-2">
                 New leads from all sources in the last {timeRange}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Missed Calls */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Missed Calls</CardTitle>
+              <PhoneIcon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-red-600">{metrics.missedCalls}</div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Calls missed in the last {timeRange}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* AI Follow-ups Sent */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">AI Follow-ups Sent</CardTitle>
+              <GlobeAltIcon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-purple-600">{metrics.aiFollowupsSent}</div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Automated follow-up messages sent
               </p>
             </CardContent>
           </Card>

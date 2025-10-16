@@ -16,7 +16,7 @@ import LinkedInCallback from './pages/LinkedInCallback'
 import Automations from './pages/Automations'
 import PublicLeadCapture from './pages/PublicLeadCapture'
 import Calendar from './pages/Calendar'
-import Messages from './pages/Messages'
+import CallsAndMessages from './pages/CallsAndMessages'
 import Reviews from './pages/Reviews'
 import ReviewCollection from './pages/ReviewCollection'
 import ReferralLanding from './pages/ReferralLanding'
@@ -70,7 +70,7 @@ function App() {
                   <Route path="/automations" element={<Automations />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/calendar" element={<Calendar />} />
-                  <Route path="/messages" element={<Messages />} />
+                  <Route path="/messages" element={<CallsAndMessages />} />
                   <Route path="/reviews" element={<Reviews />} />
                   <Route path="/brand-voice" element={<BrandVoice />} />
                   <Route path="/settings" element={<Settings />} />

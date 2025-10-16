@@ -1,5 +1,8 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import ToastNotification from './ToastNotification'
 
 interface SidebarProps {
   isOpen: boolean
@@ -33,7 +36,7 @@ const navigation = [
     href: '/contacts',
     icon: (props: any) => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" />
       </svg>
     )
   },
@@ -47,7 +50,7 @@ const navigation = [
     )
   },
   {
-    name: 'Messages',
+    name: 'Calls & Messages',
     href: '/messages',
     icon: (props: any) => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
@@ -116,9 +119,64 @@ const navigation = [
 export default function Sidebar({ isOpen, onClose, isMobile = false, isTablet = false }: SidebarProps) {
   const location = useLocation()
   const { toggleTheme, isDark } = useTheme()
+  const [missedCallsCount, setMissedCallsCount] = useState(0)
+  const [showNotification, setShowNotification] = useState(false)
+  const [notificationMessage, setNotificationMessage] = useState('')
+
+  // Check for missed calls
+  useEffect(() => {
+    const checkMissedCalls = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data: callLogs, error } = await supabase
+          .from('call_logs')
+          .select('id, call_type, call_time, phone')
+          .eq('user_id', user.id)
+          .eq('call_type', 'missed')
+          .order('call_time', { ascending: false })
+          .limit(1)
+
+        if (error) {
+          console.error('Error checking missed calls:', error)
+          return
+        }
+
+        const newMissedCalls = callLogs?.length || 0
+        if (newMissedCalls > missedCallsCount && missedCallsCount > 0) {
+          const latestCall = callLogs?.[0]
+          const phoneNumber = latestCall?.phone || 'Unknown Number'
+          setNotificationMessage(`Missed call from ${phoneNumber}`)
+          setShowNotification(true)
+        }
+        setMissedCallsCount(newMissedCalls)
+      } catch (error) {
+        console.error('Error checking missed calls:', error)
+      }
+    }
+
+    // Check immediately
+    checkMissedCalls()
+
+    // Check every 30 seconds
+    const interval = setInterval(checkMissedCalls, 30000)
+
+    return () => clearInterval(interval)
+  }, [missedCallsCount])
 
   return (
     <>
+      {/* Toast Notification */}
+      {showNotification && (
+        <ToastNotification
+          message={notificationMessage}
+          type="warning"
+          duration={5000}
+          onClose={() => setShowNotification(false)}
+        />
+      )}
+
       {/* Mobile backdrop */}
       {isOpen && (isMobile || isTablet) && (
         <div 
@@ -131,7 +189,7 @@ export default function Sidebar({ isOpen, onClose, isMobile = false, isTablet = 
       <div className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 shadow-xl transform transition-all duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static lg:inset-0 lg:shadow-lg lg:border-r lg:border-gray-200 lg:dark:border-gray-700
+        md:translate-x-0 md:static md:inset-0 md:shadow-lg md:border-r md:border-gray-200 md:dark:border-gray-700
         ${isTablet ? 'w-56' : ''}
       `}>
         <div className="flex flex-col h-full">
@@ -171,7 +229,7 @@ export default function Sidebar({ isOpen, onClose, isMobile = false, isTablet = 
               </button>
               <button
                 onClick={onClose}
-                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -206,6 +264,11 @@ export default function Sidebar({ isOpen, onClose, isMobile = false, isTablet = 
                     {item.icon({})}
                   </span>
                   <span className={`truncate ${isTablet ? 'text-xs' : ''}`}>{item.name}</span>
+                  {item.name === 'Calls & Messages' && missedCallsCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                      {missedCallsCount}
+                    </span>
+                  )}
                   {isActive && (
                     <div className="ml-auto w-2 h-2 bg-white rounded-full shadow-sm"></div>
                   )}

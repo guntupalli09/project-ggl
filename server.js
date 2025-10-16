@@ -25,9 +25,101 @@ const __dirname = path.dirname(__filename)
 const app = express()
 const PORT = 3001
 
-// Enhanced API protection and caching system
+// Enhanced API protection and caching system with retry logic
 const cache = new Map()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const QUOTA_RETRY_DELAY = 2 * 60 * 1000 // 2 minutes for quota retry
+const MAX_RETRIES = 3
+
+// Helper function to check if we should retry after quota error
+function shouldRetryAfterQuotaError(cachedData) {
+  if (!cachedData) return true
+  const timeSinceLastError = Date.now() - cachedData.lastErrorTime
+  return cachedData.retryCount < MAX_RETRIES && timeSinceLastError > QUOTA_RETRY_DELAY
+}
+
+// Helper function to validate Google Business Profile location ID
+function validateGoogleBusinessLocationId(locationId) {
+  if (!locationId) return { valid: false, error: 'Location ID is required' }
+  
+  // Google Business Profile location IDs typically follow this pattern
+  const locationIdPattern = /^[0-9]+$/
+  if (!locationIdPattern.test(locationId)) {
+    return { valid: false, error: 'Invalid location ID format' }
+  }
+  
+  return { valid: true }
+}
+
+// Helper function to validate Google access token
+function validateGoogleAccessToken(token) {
+  if (!token) return { valid: false, error: 'Access token is required' }
+  
+  // Basic JWT token validation (check structure)
+  const parts = token.split('.')
+  if (parts.length !== 3) {
+    return { valid: false, error: 'Invalid token format' }
+  }
+  
+  return { valid: true }
+}
+
+// Helper function to make API call with retry logic
+async function makeApiCallWithRetry(url, options, cacheKey, maxRetries = MAX_RETRIES) {
+  let retryCount = 0
+  
+  while (retryCount <= maxRetries) {
+    try {
+      const response = await fetch(url, options)
+      
+      if (response.status === 429) {
+        // Quota exceeded - cache the error and retry later
+        const errorData = await response.json()
+        cache.set(cacheKey, {
+          data: null,
+          timestamp: Date.now(),
+          retryCount: retryCount + 1,
+          lastErrorTime: Date.now(),
+          lastError: errorData
+        })
+        
+        if (retryCount < maxRetries) {
+          console.log(`Quota exceeded, will retry in ${QUOTA_RETRY_DELAY/1000} seconds (attempt ${retryCount + 1}/${maxRetries + 1})`)
+          await new Promise(resolve => setTimeout(resolve, QUOTA_RETRY_DELAY))
+          retryCount++
+          continue
+        }
+      }
+      
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.status} ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      
+      // Cache successful response
+      cache.set(cacheKey, {
+        data: data,
+        timestamp: Date.now(),
+        retryCount: 0,
+        lastErrorTime: null,
+        lastError: null
+      })
+      
+      return { success: true, data }
+      
+    } catch (error) {
+      console.error(`API call attempt ${retryCount + 1} failed:`, error)
+      
+      if (retryCount < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))) // Exponential backoff
+        retryCount++
+      } else {
+        throw error
+      }
+    }
+  }
+}
 
 // Rate limiting and API protection
 const rateLimitStore = new Map()
@@ -80,6 +172,55 @@ function getCache(key) {
   }
   
   return cached.data
+}
+
+
+async function generateMissedCallMessage(details) {
+  const {
+    businessName,
+    bookingLink,
+    businessHours,
+    businessUrl,
+    callerNumber
+  } = details
+
+  const prompt = `You are a professional assistant for a small local business.
+A customer just called but the owner couldn't answer. Write a short, friendly, and actionable SMS text (max 480 characters) to the customer.
+Include: a brief apology, the business name, today's business hours (if provided), a booking link, and the website URL. Be concise and human.
+
+Business name: ${businessName || 'our business'}
+Business hours: ${businessHours || 'not provided'}
+Booking link: ${bookingLink || 'not provided'}
+Website: ${businessUrl || 'not provided'}
+Customer phone: ${callerNumber}
+
+Reply with only the SMS text.`
+
+  // Try local Ollama first
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+    const res = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: process.env.OLLAMA_MODEL || 'llama3', prompt, stream: false }),
+      signal: controller.signal
+    })
+    clearTimeout(timeout)
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.response) return data.response.trim()
+    }
+  } catch (err) {
+    console.log('Ollama not available; using fallback message')
+  }
+
+  // Use the exact template specified by the user
+  const hoursText = businessHours ? `${businessHours} are our business hours` : 'our business hours'
+  const bookingText = bookingLink ? `if you want to book, cancel, edit appointment here is the ${bookingLink}` : 'if you want to book, cancel, edit appointment please contact us'
+  const websiteText = businessUrl ? `for more information visit our ${businessUrl}` : 'for more information please contact us'
+  
+  return `Thank you for reaching out ${businessName}, sorry we missed your call. ${hoursText}, ${bookingText}, ${websiteText}, one of our representative will be in touch with you shortly!!`
 }
 
 // Middleware
@@ -238,9 +379,16 @@ app.get('/api/google/messages/list', async (req, res) => {
     // Check cache first to prevent quota exhaustion
     const cacheKey = `conversations_${token.substring(0, 10)}`
     const cached = cache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    
+    // Check if we have valid cached data
+    if (cached && cached.data && Date.now() - cached.timestamp < CACHE_DURATION) {
       console.log('Returning cached conversations data')
       return res.json(cached.data)
+    }
+    
+    // Check if we should retry after quota error
+    if (cached && !cached.data && shouldRetryAfterQuotaError(cached)) {
+      console.log('Retrying after quota error...')
     }
     
     // For now, we need to get the user's business profile first
@@ -359,7 +507,14 @@ app.get('/api/google/messages/list', async (req, res) => {
               }
             ],
             totalSize: 2,
-            message: 'Demo conversations (Google My Business APIs quota exceeded). Wait a few minutes for quota to reset, or upgrade your Google Cloud plan for higher limits.'
+            isMockData: true,
+            mockDataReason: 'Google My Business APIs quota exceeded or not enabled',
+            message: '⚠️ DEMO DATA: Google My Business APIs quota exceeded. Wait a few minutes for quota to reset, or upgrade your Google Cloud plan for higher limits.',
+            setup_required: [
+              'Enable Google My Business API in Google Cloud Console',
+              'Upgrade Google Cloud plan for higher API limits',
+              'Wait for quota reset (usually 1-2 minutes)'
+            ]
           }
           
           // Cache the mock data
@@ -400,7 +555,14 @@ app.get('/api/google/messages/list', async (req, res) => {
           }
         ],
         totalSize: 2,
-        message: 'Demo conversations (Google My Business APIs quota exceeded). Wait a few minutes for quota to reset, or upgrade your Google Cloud plan for higher limits.'
+        isMockData: true,
+        mockDataReason: 'Google My Business API error',
+        message: '⚠️ DEMO DATA: Google My Business APIs quota exceeded. Wait a few minutes for quota to reset, or upgrade your Google Cloud plan for higher limits.',
+        setup_required: [
+          'Enable Google My Business API in Google Cloud Console',
+          'Upgrade Google Cloud plan for higher API limits',
+          'Wait for quota reset (usually 1-2 minutes)'
+        ]
       })
     }
   } catch (error) {
@@ -492,7 +654,7 @@ app.post('/api/google/messages/send', async (req, res) => {
       // In a real implementation, you'd integrate with actual messaging platforms like:
       // - WhatsApp Business API
       // - Facebook Messenger
-      // - SMS via Twilio
+      // - Messages via Google Business Profile
       // - Email notifications
       
       console.log(`Simulating message send to conversation ${conversationId}: ${messageText}`)
@@ -519,7 +681,7 @@ app.post('/api/google/messages/send', async (req, res) => {
         setup_required: [
           'Integrate with WhatsApp Business API',
           'Integrate with Facebook Messenger',
-          'Integrate with SMS via Twilio',
+          'Integrate with Google Business Messages',
           'Set up email notifications'
         ]
       })
@@ -659,9 +821,18 @@ app.get('/api/google/business/performance', async (req, res) => {
           const mockData = {
             performance: [],
             totalSize: 0,
+            isMockData: true,
+            mockDataReason: isQuotaError ? 'API quota exceeded' : 'Performance API not enabled',
             message: isQuotaError 
-              ? 'Google Business Profile API quota exceeded. Wait a few minutes for quota to reset, or upgrade your Google Cloud plan for higher limits.'
-              : 'Google Business Profile Performance API not enabled. Please enable "Business Profile Performance API" in Google Cloud Console.'
+              ? '⚠️ DEMO DATA: Google Business Profile API quota exceeded. Wait a few minutes for quota to reset, or upgrade your Google Cloud plan for higher limits.'
+              : '⚠️ DEMO DATA: Google Business Profile Performance API not enabled. Please enable "Business Profile Performance API" in Google Cloud Console.',
+            setup_required: isQuotaError ? [
+              'Wait for quota reset (usually 1-2 minutes)',
+              'Upgrade Google Cloud plan for higher API limits'
+            ] : [
+              'Enable "Business Profile Performance API" in Google Cloud Console',
+              'Ensure your Google Business Profile is verified'
+            ]
           }
           
           // Cache the mock data
@@ -682,7 +853,14 @@ app.get('/api/google/business/performance', async (req, res) => {
       const mockData = {
         performance: [],
         totalSize: 0,
-        message: 'Unable to fetch performance data. Please ensure your Google Business Profile is set up and the Performance API is enabled.'
+        isMockData: true,
+        mockDataReason: 'Unable to fetch performance data',
+        message: '⚠️ DEMO DATA: Unable to fetch performance data. Please ensure your Google Business Profile is set up and the Performance API is enabled.',
+        setup_required: [
+          'Set up Google Business Profile',
+          'Enable "Business Profile Performance API" in Google Cloud Console',
+          'Verify your business profile is active'
+        ]
       }
       
       // Cache the error response
@@ -1512,8 +1690,21 @@ app.all('/api/consolidated', async (req, res) => {
       case 'email-send':
         return await handleEmailSend(req, res)
       
-      case 'twilio-incoming-call':
-        return await handleTwilioIncomingCall(req, res)
+      
+      case 'google-business-calls':
+        return await handleGoogleBusinessCalls(req, res)
+      
+      case 'google-missed-call-followup':
+        return await handleGoogleMissedCallFollowup(req, res)
+      
+      case 'google-calls-sync':
+        return await handleGoogleCallsSync(req, res)
+      
+      case 'booking-webhook':
+        return await handleBookingWebhook(req, res)
+      
+      case 'calendar-sync':
+        return await handleCalendarSync(req, res)
       
       default:
         return res.status(400).json({ error: 'Invalid action' })
@@ -1935,41 +2126,6 @@ async function handleEmailSend(req, res) {
   res.status(200).json({ success: true, message: 'Email logged' })
 }
 
-async function handleTwilioIncomingCall(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  const { From, To } = req.body
-
-  if (!From || !To) {
-    return res.status(400).json({ error: 'Missing phone numbers' })
-  }
-
-  // Create lead from missed call
-  const { data: lead, error } = await supabase
-    .from('leads')
-    .insert({
-      name: 'Missed Call',
-      phone: From,
-      source: 'missed_call',
-      status: 'new',
-      workflow_stage: 'missed_call',
-      user_id: null // Will be updated based on phone number lookup
-    })
-    .select()
-    .single()
-
-  if (error) {
-    return res.status(500).json({ error: 'Failed to create lead' })
-  }
-
-  res.status(200).json({ 
-    success: true, 
-    lead_id: lead.id,
-    message: 'Lead created from missed call'
-  })
-}
 
 // Initialize workflow engine
 async function initializeWorkflowEngine() {
@@ -1979,6 +2135,1085 @@ async function initializeWorkflowEngine() {
   } catch (error) {
     console.error('Error initializing workflow engine:', error)
   }
+}
+
+// Google Business Profile calls handler
+async function handleGoogleBusinessCalls(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  try {
+    const { user_id } = req.query
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'User ID is required' })
+    }
+
+    // Get user's Google Business Profile settings
+    const { data: userSettings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('google_business_location_id, google_access_token, google_token_expiry')
+      .eq('user_id', user_id)
+      .single()
+
+    if (settingsError || !userSettings) {
+      return res.status(404).json({ error: 'User settings not found' })
+    }
+
+    if (!userSettings.google_business_location_id || !userSettings.google_access_token) {
+      return res.status(400).json({ error: 'Google Business Profile not connected' })
+    }
+
+    // Validate Google Business Profile data
+    const locationValidation = validateGoogleBusinessLocationId(userSettings.google_business_location_id)
+    if (!locationValidation.valid) {
+      return res.status(400).json({ 
+        error: 'Invalid Google Business Profile configuration',
+        details: locationValidation.error
+      })
+    }
+
+    const tokenValidation = validateGoogleAccessToken(userSettings.google_access_token)
+    if (!tokenValidation.valid) {
+      return res.status(400).json({ 
+        error: 'Invalid Google access token',
+        details: tokenValidation.error
+      })
+    }
+
+    // Check if token is still valid
+    const now = new Date()
+    const expiry = new Date(userSettings.google_token_expiry)
+    if (now >= expiry) {
+      return res.status(401).json({ error: 'Google access token expired' })
+    }
+
+    // Fetch call logs from Google Business Profile API
+    const googleResponse = await fetch(
+      `https://mybusiness.googleapis.com/v4/accounts/${userSettings.google_business_location_id}/locations/${userSettings.google_business_location_id}/callLogs`,
+      {
+        headers: {
+          'Authorization': `Bearer ${userSettings.google_access_token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
+    if (!googleResponse.ok) {
+      const errorData = await googleResponse.json()
+      console.error('Google API Error:', errorData)
+      return res.status(googleResponse.status).json({ 
+        error: 'Failed to fetch call logs from Google',
+        details: errorData
+      })
+    }
+
+    const callLogsData = await googleResponse.json()
+    const callLogs = callLogsData.callLogs || []
+
+    // Process and store call logs in our database
+    const processedCalls = []
+    
+    for (const call of callLogs) {
+      // Check if call already exists
+      const { data: existingCall } = await supabase
+        .from('call_logs')
+        .select('id')
+        .eq('google_call_id', call.callId)
+        .single()
+
+      if (existingCall) {
+        // Update existing call if needed
+        const { error: updateError } = await supabase
+          .from('call_logs')
+          .update({
+            call_type: call.callType === 'MISSED' ? 'missed' : 'answered',
+            duration_seconds: call.durationSeconds,
+            updated_at: new Date().toISOString()
+          })
+          .eq('google_call_id', call.callId)
+
+        if (updateError) {
+          console.error('Error updating call log:', updateError)
+        }
+      } else {
+        // Create new call log entry
+        const { data: newCall, error: insertError } = await supabase
+          .from('call_logs')
+          .insert({
+            user_id: user_id,
+            phone: call.phoneNumber,
+            caller_name: call.callerName,
+            call_type: call.callType === 'MISSED' ? 'missed' : 'answered',
+            call_time: call.startTime,
+            duration_seconds: call.durationSeconds,
+            google_call_id: call.callId,
+            ai_followup_sent: false
+          })
+          .select()
+          .single()
+
+        if (insertError) {
+          console.error('Error inserting call log:', insertError)
+        } else {
+          processedCalls.push(newCall)
+          
+          // If it's a missed call, create a lead and trigger automation
+          if (call.callType === 'MISSED') {
+            try {
+              // Create a lead from the missed call
+              const { data: lead, error: leadError } = await supabase
+                .from('leads')
+                .insert({
+                  name: call.callerName || 'Missed Call',
+                  phone: call.phoneNumber,
+                  source: 'missed_call',
+                  status: 'new',
+                  workflow_stage: 'callback_asap',
+                  user_id: user_id
+                })
+                .select()
+                .single()
+
+              if (leadError) {
+                console.error('Failed to create lead from missed call:', leadError)
+              } else {
+                // Update the call log with the lead ID
+                await supabase
+                  .from('call_logs')
+                  .update({ lead_id: lead.id })
+                  .eq('id', newCall.id)
+
+                // Check if missed call automation is enabled
+                const { data: automationSettings } = await supabase
+                  .from('user_settings')
+                  .select('missed_call_automation_enabled, business_name, business_hours, booking_link, business_website')
+                  .eq('user_id', user_id)
+                  .single()
+                
+                if (automationSettings?.missed_call_automation_enabled) {
+                  // Automatically trigger AI follow-up
+                  await handleGoogleMissedCallFollowup({
+                    body: { call_id: newCall.id, user_id: user_id }
+                  }, { status: () => {}, json: () => {} })
+                }
+              }
+            } catch (followupError) {
+              console.error('Error processing missed call:', followupError)
+            }
+          }
+        }
+      }
+    }
+
+    // Get all call logs for this user from our database
+    const { data: allCallLogs, error: fetchError } = await supabase
+      .from('call_logs')
+      .select('*')
+      .eq('user_id', user_id)
+      .order('call_time', { ascending: false })
+      .limit(50)
+
+    if (fetchError) {
+      console.error('Error fetching call logs:', fetchError)
+      return res.status(500).json({ error: 'Failed to fetch call logs' })
+    }
+
+    return res.status(200).json({
+      success: true,
+      callLogs: allCallLogs || [],
+      processed: processedCalls.length
+    })
+
+  } catch (error) {
+    console.error('Error in Google Business calls API:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Google missed call AI follow-up handler
+async function handleGoogleMissedCallFollowup(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  try {
+    const { call_id, user_id } = req.body
+
+    if (!call_id || !user_id) {
+      return res.status(400).json({ error: 'Call ID and User ID are required' })
+    }
+
+    // Get the call log
+    const { data: callLog, error: callError } = await supabase
+      .from('call_logs')
+      .select('*')
+      .eq('id', call_id)
+      .eq('user_id', user_id)
+      .single()
+
+    if (callError || !callLog) {
+      return res.status(404).json({ error: 'Call log not found' })
+    }
+
+    if (callLog.ai_followup_sent) {
+      return res.status(400).json({ error: 'AI follow-up already sent for this call' })
+    }
+
+    // Get user settings for business info
+    const { data: userSettings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('business_name, business_hours, booking_link, business_website, google_access_token')
+      .eq('user_id', user_id)
+      .single()
+
+    if (settingsError || !userSettings) {
+      return res.status(404).json({ error: 'User settings not found' })
+    }
+
+    // Generate AI follow-up message using Profile page data
+    const aiMessage = await generateMissedCallMessage({
+      businessName: userSettings.business_name || 'our business',
+      bookingLink: userSettings.booking_link || 'our booking system',
+      businessHours: userSettings.business_hours || 'our business hours',
+      businessUrl: userSettings.business_website || 'our website',
+      callerNumber: callLog.phone
+    })
+
+    // Send message via Google Business Messages API
+    if (userSettings.google_access_token) {
+      try {
+        // Send message via Google Business Messages API
+        const messageResponse = await fetch('http://localhost:3001/api/google/messages/send', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userSettings.google_access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            conversationId: `missed_call_${callLog.phone}`, // Create a conversation ID for missed calls
+            messageText: aiMessage
+          })
+        })
+
+        if (messageResponse.ok) {
+          console.log('AI Follow-up message sent successfully:', aiMessage)
+        } else {
+          console.error('Failed to send AI follow-up message:', await messageResponse.text())
+        }
+        
+        // Update call log to mark AI follow-up as sent
+        const { error: updateError } = await supabase
+          .from('call_logs')
+          .update({
+            ai_followup_sent: true,
+            call_type: 'ai_followup_sent',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', call_id)
+
+        if (updateError) {
+          console.error('Error updating call log:', updateError)
+        }
+
+        // Log the AI follow-up activity
+        await supabase.from('automation_logs').insert({
+          user_id: user_id,
+          lead_id: callLog.lead_id,
+          action_type: 'ai_followup_sent',
+          status: 'completed',
+          trigger_event: 'missed_call',
+          executed_at: new Date().toISOString(),
+          metadata: {
+            call_id: call_id,
+            phone: callLog.phone,
+            message: aiMessage
+          }
+        })
+
+        return res.status(200).json({
+          success: true,
+          message: 'AI follow-up sent successfully',
+          aiMessage: aiMessage
+        })
+
+      } catch (error) {
+        console.error('Error sending AI follow-up:', error)
+        return res.status(500).json({ error: 'Failed to send AI follow-up' })
+      }
+    } else {
+      return res.status(400).json({ error: 'Google Business Profile not connected' })
+    }
+
+  } catch (error) {
+    console.error('Error in Google missed call follow-up:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Google calls sync handler (for cron jobs)
+async function handleGoogleCallsSync(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  try {
+    // Get all users with Google Business Profile connected
+    const { data: users, error: usersError } = await supabase
+      .from('user_settings')
+      .select('user_id, google_business_location_id, google_access_token, google_token_expiry, missed_call_automation_enabled')
+      .not('google_business_location_id', 'is', null)
+      .not('google_access_token', 'is', null)
+      .eq('missed_call_automation_enabled', true)
+
+    if (usersError) {
+      console.error('Error fetching users:', usersError)
+      return res.status(500).json({ error: 'Failed to fetch users' })
+    }
+
+    const results = []
+
+    for (const user of users || []) {
+      try {
+        // Check if token is still valid
+        const now = new Date()
+        const expiry = new Date(user.google_token_expiry)
+        if (now >= expiry) {
+          console.log(`Token expired for user ${user.user_id}`)
+          continue
+        }
+
+        // Fetch call logs from Google Business Profile API
+        const googleResponse = await fetch(
+          `https://mybusiness.googleapis.com/v4/accounts/${user.google_business_location_id}/locations/${user.google_business_location_id}/callLogs`,
+          {
+            headers: {
+              'Authorization': `Bearer ${user.google_access_token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+
+        if (!googleResponse.ok) {
+          console.error(`Google API Error for user ${user.user_id}:`, await googleResponse.text())
+          continue
+        }
+
+        const callLogsData = await googleResponse.json()
+        const callLogs = callLogsData.callLogs || []
+
+        let processedCount = 0
+
+        for (const call of callLogs) {
+          // Check if call already exists
+          const { data: existingCall } = await supabase
+            .from('call_logs')
+            .select('id')
+            .eq('google_call_id', call.callId)
+            .single()
+
+          if (!existingCall) {
+            // Create new call log entry
+            const { data: newCall, error: insertError } = await supabase
+              .from('call_logs')
+              .insert({
+                user_id: user.user_id,
+                phone: call.phoneNumber,
+                caller_name: call.callerName,
+                call_type: call.callType === 'MISSED' ? 'missed' : 'answered',
+                call_time: call.startTime,
+                duration_seconds: call.durationSeconds,
+                google_call_id: call.callId,
+                ai_followup_sent: false
+              })
+              .select()
+              .single()
+
+            if (insertError) {
+              console.error('Error inserting call log:', insertError)
+            } else {
+              processedCount++
+
+              // If it's a missed call, create a lead and trigger automation
+              if (call.callType === 'MISSED') {
+                try {
+                  // Create a lead from the missed call
+                  const { data: lead, error: leadError } = await supabase
+                    .from('leads')
+                    .insert({
+                      name: call.callerName || 'Missed Call',
+                      phone: call.phoneNumber,
+                      source: 'missed_call',
+                      status: 'new',
+                      workflow_stage: 'callback_asap',
+                      user_id: user.user_id
+                    })
+                    .select()
+                    .single()
+
+                  if (leadError) {
+                    console.error('Failed to create lead from missed call:', leadError)
+                  } else {
+                    // Update the call log with the lead ID
+                    await supabase
+                      .from('call_logs')
+                      .update({ lead_id: lead.id })
+                      .eq('id', newCall.id)
+
+                    // Trigger AI follow-up
+                    const followupResponse = await fetch('http://localhost:3001/api/consolidated?action=google-missed-call-followup', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        call_id: newCall.id,
+                        user_id: user.user_id
+                      })
+                    })
+
+                    if (!followupResponse.ok) {
+                      console.error('Failed to trigger AI follow-up:', await followupResponse.text())
+                    }
+                  }
+                } catch (followupError) {
+                  console.error('Error processing missed call:', followupError)
+                }
+              }
+            }
+          }
+        }
+
+        results.push({
+          user_id: user.user_id,
+          processed: processedCount,
+          total_calls: callLogs.length
+        })
+
+      } catch (error) {
+        console.error(`Error processing user ${user.user_id}:`, error)
+        results.push({
+          user_id: user.user_id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Google calls sync completed',
+      results
+    })
+
+  } catch (error) {
+    console.error('Error in Google calls sync:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Booking webhook handler
+async function handleBookingWebhook(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  try {
+    const { 
+      event_type, 
+      booking_id, 
+      lead_id, 
+      user_id, 
+      customer_name, 
+      customer_email, 
+      customer_phone, 
+      appointment_date, 
+      appointment_time, 
+      status, 
+      service_type,
+      notes,
+      booking_source = 'external'
+    } = req.body
+
+    if (!event_type || !booking_id || !user_id) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    console.log(`Booking webhook received: ${event_type} for booking ${booking_id}`)
+
+    switch (event_type) {
+      case 'booking_created':
+        await processBookingCreated({
+          booking_id,
+          lead_id,
+          user_id,
+          customer_name,
+          customer_email,
+          customer_phone,
+          appointment_date,
+          appointment_time,
+          status,
+          service_type,
+          notes,
+          booking_source
+        })
+        break
+
+      case 'booking_updated':
+        await processBookingUpdated({
+          booking_id,
+          lead_id,
+          user_id,
+          customer_name,
+          customer_email,
+          customer_phone,
+          appointment_date,
+          appointment_time,
+          status,
+          service_type,
+          notes
+        })
+        break
+
+      case 'booking_cancelled':
+        await processBookingCancelled({
+          booking_id,
+          lead_id,
+          user_id,
+          status: 'cancelled'
+        })
+        break
+
+      case 'booking_completed':
+        await processBookingCompleted({
+          booking_id,
+          lead_id,
+          user_id,
+          status: 'completed'
+        })
+        break
+
+      default:
+        return res.status(400).json({ error: 'Invalid event type' })
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      message: `Booking ${event_type} processed successfully` 
+    })
+
+  } catch (error) {
+    console.error('Booking webhook error:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Calendar sync handler
+async function handleCalendarSync(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  try {
+    const { user_id, booking_id, action, appointment_data } = req.body
+
+    if (!user_id || !booking_id || !action) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    // Get user's Google Calendar settings
+    const { data: userSettings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('google_calendar_id, google_access_token, google_token_expiry')
+      .eq('user_id', user_id)
+      .single()
+
+    if (settingsError || !userSettings) {
+      return res.status(404).json({ error: 'User calendar settings not found' })
+    }
+
+    // Check if token is still valid
+    const now = new Date()
+    const expiry = new Date(userSettings.google_token_expiry)
+    if (now >= expiry) {
+      return res.status(401).json({ error: 'Google token expired' })
+    }
+
+    // Get booking details
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('id', booking_id)
+      .eq('user_id', user_id)
+      .single()
+
+    if (bookingError || !booking) {
+      return res.status(404).json({ error: 'Booking not found' })
+    }
+
+    let calendarEvent = null
+
+    switch (action) {
+      case 'create':
+        calendarEvent = await createCalendarEvent(userSettings, booking, appointment_data)
+        break
+      case 'update':
+        calendarEvent = await updateCalendarEvent(userSettings, booking, appointment_data)
+        break
+      case 'delete':
+        calendarEvent = await deleteCalendarEvent(userSettings, booking)
+        break
+      default:
+        return res.status(400).json({ error: 'Invalid action' })
+    }
+
+    // Update booking with calendar event ID
+    if (calendarEvent && calendarEvent.id) {
+      await supabase
+        .from('bookings')
+        .update({
+          google_calendar_event_id: calendarEvent.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', booking_id)
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Calendar event ${action}d successfully`,
+      calendar_event: calendarEvent
+    })
+
+  } catch (error) {
+    console.error('Calendar sync error:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Booking processing functions
+async function processBookingCreated(data) {
+  const { booking_id, lead_id, user_id, customer_name, customer_email, customer_phone, appointment_date, appointment_time, status, service_type, notes, booking_source } = data
+
+  // Create or update booking
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .upsert({
+      id: booking_id,
+      lead_id: lead_id,
+      user_id: user_id,
+      customer_name: customer_name,
+      customer_email: customer_email,
+      customer_phone: customer_phone,
+      appointment_date: appointment_date,
+      appointment_time: appointment_time,
+      status: status || 'scheduled',
+      service_type: service_type,
+      notes: notes,
+      booking_source: booking_source,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'id'
+    })
+    .select()
+    .single()
+
+  if (bookingError) {
+    console.error('Error creating booking:', bookingError)
+    throw bookingError
+  }
+
+  // Update lead status if lead_id provided
+  if (lead_id) {
+    await supabase
+      .from('leads')
+      .update({
+        status: 'booked',
+        workflow_stage: 'appointment_scheduled',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', lead_id)
+  }
+
+  // Sync with Google Calendar
+  try {
+    await fetch('http://localhost:3001/api/consolidated?action=calendar-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user_id,
+        booking_id: booking_id,
+        action: 'create',
+        appointment_data: {
+          summary: `${service_type || 'Appointment'} - ${customer_name}`,
+          description: `Customer: ${customer_name}\nPhone: ${customer_phone}\nEmail: ${customer_email}\nNotes: ${notes || 'No additional notes'}`,
+          start: {
+            dateTime: `${appointment_date}T${appointment_time}:00`,
+            timeZone: 'America/New_York'
+          },
+          end: {
+            dateTime: `${appointment_date}T${appointment_time}:00`,
+            timeZone: 'America/New_York'
+          }
+        }
+      })
+    })
+  } catch (calendarError) {
+    console.error('Calendar sync failed:', calendarError)
+  }
+
+  // Log the booking creation
+  await supabase
+    .from('automation_logs')
+    .insert({
+      user_id: user_id,
+      lead_id: lead_id,
+      booking_id: booking_id,
+      action_type: 'booking_created',
+      status: 'completed',
+      trigger_event: 'external_booking',
+      executed_at: new Date().toISOString(),
+      metadata: {
+        customer_name: customer_name,
+        appointment_date: appointment_date,
+        appointment_time: appointment_time,
+        service_type: service_type
+      }
+    })
+
+  console.log(`Booking created: ${booking_id} for customer ${customer_name}`)
+}
+
+async function processBookingUpdated(data) {
+  const { booking_id, lead_id, user_id, customer_name, customer_email, customer_phone, appointment_date, appointment_time, status, service_type, notes } = data
+
+  // Update booking
+  const { error: bookingError } = await supabase
+    .from('bookings')
+    .update({
+      customer_name: customer_name,
+      customer_email: customer_email,
+      customer_phone: customer_phone,
+      appointment_date: appointment_date,
+      appointment_time: appointment_time,
+      status: status,
+      service_type: service_type,
+      notes: notes,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', booking_id)
+
+  if (bookingError) {
+    console.error('Error updating booking:', bookingError)
+    throw bookingError
+  }
+
+  // Update lead workflow stage based on status
+  if (lead_id) {
+    let workflowStage = 'appointment_scheduled'
+    if (status === 'rescheduled') {
+      workflowStage = 'appointment_rescheduled'
+    } else if (status === 'completed') {
+      workflowStage = 'appointment_completed'
+    }
+
+    await supabase
+      .from('leads')
+      .update({
+        workflow_stage: workflowStage,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', lead_id)
+  }
+
+  // Sync with Google Calendar
+  try {
+    await fetch('http://localhost:3001/api/consolidated?action=calendar-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user_id,
+        booking_id: booking_id,
+        action: 'update',
+        appointment_data: {
+          summary: `${service_type || 'Appointment'} - ${customer_name}`,
+          description: `Customer: ${customer_name}\nPhone: ${customer_phone}\nEmail: ${customer_email}\nNotes: ${notes || 'No additional notes'}`,
+          start: {
+            dateTime: `${appointment_date}T${appointment_time}:00`,
+            timeZone: 'America/New_York'
+          },
+          end: {
+            dateTime: `${appointment_date}T${appointment_time}:00`,
+            timeZone: 'America/New_York'
+          }
+        }
+      })
+    })
+  } catch (calendarError) {
+    console.error('Calendar sync failed:', calendarError)
+  }
+
+  // Log the booking update
+  await supabase
+    .from('automation_logs')
+    .insert({
+      user_id: user_id,
+      lead_id: lead_id,
+      booking_id: booking_id,
+      action_type: 'booking_updated',
+      status: 'completed',
+      trigger_event: 'external_booking',
+      executed_at: new Date().toISOString(),
+      metadata: {
+        customer_name: customer_name,
+        appointment_date: appointment_date,
+        appointment_time: appointment_time,
+        status: status
+      }
+    })
+
+  console.log(`Booking updated: ${booking_id}`)
+}
+
+async function processBookingCancelled(data) {
+  const { booking_id, lead_id, user_id, status } = data
+
+  // Update booking status
+  const { error: bookingError } = await supabase
+    .from('bookings')
+    .update({
+      status: status,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', booking_id)
+
+  if (bookingError) {
+    console.error('Error cancelling booking:', bookingError)
+    throw bookingError
+  }
+
+  // Update lead workflow stage
+  if (lead_id) {
+    await supabase
+      .from('leads')
+      .update({
+        workflow_stage: 'appointment_cancelled',
+        status: 'cancelled',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', lead_id)
+  }
+
+  // Sync with Google Calendar
+  try {
+    await fetch('http://localhost:3001/api/consolidated?action=calendar-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user_id,
+        booking_id: booking_id,
+        action: 'delete'
+      })
+    })
+  } catch (calendarError) {
+    console.error('Calendar sync failed:', calendarError)
+  }
+
+  // Log the booking cancellation
+  await supabase
+    .from('automation_logs')
+    .insert({
+      user_id: user_id,
+      lead_id: lead_id,
+      booking_id: booking_id,
+      action_type: 'booking_cancelled',
+      status: 'completed',
+      trigger_event: 'external_booking',
+      executed_at: new Date().toISOString(),
+      metadata: {
+        status: status
+      }
+    })
+
+  console.log(`Booking cancelled: ${booking_id}`)
+}
+
+async function processBookingCompleted(data) {
+  const { booking_id, lead_id, user_id, status } = data
+
+  // Update booking status
+  const { error: bookingError } = await supabase
+    .from('bookings')
+    .update({
+      status: status,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', booking_id)
+
+  if (bookingError) {
+    console.error('Error completing booking:', bookingError)
+    throw bookingError
+  }
+
+  // Update lead workflow stage
+  if (lead_id) {
+    await supabase
+      .from('leads')
+      .update({
+        workflow_stage: 'appointment_completed',
+        status: 'completed',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', lead_id)
+  }
+
+  // Log the booking completion
+  await supabase
+    .from('automation_logs')
+    .insert({
+      user_id: user_id,
+      lead_id: lead_id,
+      booking_id: booking_id,
+      action_type: 'booking_completed',
+      status: 'completed',
+      trigger_event: 'external_booking',
+      executed_at: new Date().toISOString(),
+      metadata: {
+        status: status
+      }
+    })
+
+  console.log(`Booking completed: ${booking_id}`)
+}
+
+// Calendar event functions
+async function createCalendarEvent(userSettings, booking, appointment_data) {
+  const eventData = appointment_data || {
+    summary: `${booking.service_type || 'Appointment'} - ${booking.customer_name}`,
+    description: `Customer: ${booking.customer_name}\nPhone: ${booking.customer_phone}\nEmail: ${booking.customer_email}\nNotes: ${booking.notes || 'No additional notes'}`,
+    start: {
+      dateTime: `${booking.appointment_date}T${booking.appointment_time}:00`,
+      timeZone: 'America/New_York'
+    },
+    end: {
+      dateTime: `${booking.appointment_date}T${booking.appointment_time}:00`,
+      timeZone: 'America/New_York'
+    },
+    attendees: [
+      {
+        email: booking.customer_email,
+        displayName: booking.customer_name
+      }
+    ],
+    reminders: {
+      useDefault: false,
+      overrides: [
+        { method: 'email', minutes: 24 * 60 },
+        { method: 'popup', minutes: 30 }
+      ]
+    }
+  }
+
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${userSettings.google_calendar_id}/events`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${userSettings.google_access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(eventData)
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Google Calendar API error: ${error}`)
+  }
+
+  return await response.json()
+}
+
+async function updateCalendarEvent(userSettings, booking, appointment_data) {
+  if (!booking.google_calendar_event_id) {
+    return await createCalendarEvent(userSettings, booking, appointment_data)
+  }
+
+  const eventData = appointment_data || {
+    summary: `${booking.service_type || 'Appointment'} - ${booking.customer_name}`,
+    description: `Customer: ${booking.customer_name}\nPhone: ${booking.customer_phone}\nEmail: ${booking.customer_email}\nNotes: ${booking.notes || 'No additional notes'}`,
+    start: {
+      dateTime: `${booking.appointment_date}T${booking.appointment_time}:00`,
+      timeZone: 'America/New_York'
+    },
+    end: {
+      dateTime: `${booking.appointment_date}T${booking.appointment_time}:00`,
+      timeZone: 'America/New_York'
+    },
+    attendees: [
+      {
+        email: booking.customer_email,
+        displayName: booking.customer_name
+      }
+    ]
+  }
+
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${userSettings.google_calendar_id}/events/${booking.google_calendar_event_id}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${userSettings.google_access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(eventData)
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Google Calendar API error: ${error}`)
+  }
+
+  return await response.json()
+}
+
+async function deleteCalendarEvent(userSettings, booking) {
+  if (!booking.google_calendar_event_id) {
+    return { success: true, message: 'No calendar event to delete' }
+  }
+
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${userSettings.google_calendar_id}/events/${booking.google_calendar_event_id}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${userSettings.google_access_token}`
+      }
+    }
+  )
+
+  if (!response.ok && response.status !== 410) {
+    const error = await response.text()
+    throw new Error(`Google Calendar API error: ${error}`)
+  }
+
+  return { success: true, message: 'Calendar event deleted' }
 }
 
 app.listen(PORT, async () => {
