@@ -60,7 +60,7 @@ const Settings: React.FC = () => {
       // Load user profile data
       setUserProfile({
         plan_type: user.user_metadata?.plan_type || 'free',
-        created_at: user.created_at || '',
+        created_at: (user as any).created_at || '',
         is_guest: isGuestUser()
       })
 
