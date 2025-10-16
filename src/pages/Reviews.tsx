@@ -8,6 +8,8 @@ import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { Alert } from '../components/ui/Alert'
 import { PageHeader } from '../components/ui/PageHeader'
+import GuestModeWarning from '../components/GuestModeWarning'
+import { isGuestUser } from '../lib/authUtils'
 import { 
   StarIcon, 
   UserGroupIcon,
@@ -236,13 +238,24 @@ export default function Reviews() {
   return (
     <div className="h-full bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Guest Mode Warning */}
+        {isGuestUser() && (
+          <GuestModeWarning 
+            feature="Google Reviews Integration"
+            description="Google Reviews integration is not available in guest mode. Sign in to connect your Google Business Profile and manage reviews."
+            actionText="Sign in to connect your Google Business Profile"
+          />
+        )}
+
         <PageHeader
           title="Reviews & Referrals"
           subtitle="Manage customer reviews and track referral requests"
           actions={
-            <Button onClick={fetchData}>
-              Refresh Data
-            </Button>
+            !isGuestUser() && (
+              <Button onClick={fetchData}>
+                Refresh Data
+              </Button>
+            )
           }
         />
 

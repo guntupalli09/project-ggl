@@ -92,15 +92,16 @@ export default function Profile() {
 
       setUser(currentUser)
 
-      // Load user settings
+      // Load user settings with better error handling
       const { data: settings, error: settingsError } = await supabase
         .from('user_settings')
         .select('*')
         .eq('user_id', currentUser.id)
-        .single()
+        .maybeSingle() // Use maybeSingle() instead of single() to handle no results gracefully
 
-      if (settingsError && settingsError.code !== 'PGRST116') {
+      if (settingsError) {
         console.error('Error loading settings:', settingsError)
+        setError(`Error loading settings: ${settingsError.message}`)
       } else if (settings) {
         setFormData({
           business_name: settings.business_name || currentUser.company || '',
@@ -112,6 +113,20 @@ export default function Profile() {
           google_place_id: settings.google_place_id || '',
           business_address: settings.business_address || '',
           business_website: settings.business_website || ''
+        })
+      } else {
+        // No settings found, use defaults
+        console.log('No user settings found, using defaults')
+        setFormData({
+          business_name: currentUser.company || '',
+          booking_link: '',
+          business_slug: '',
+          twilio_phone_number: '',
+          business_phone: '',
+          missed_call_automation_enabled: false,
+          google_place_id: '',
+          business_address: '',
+          business_website: ''
         })
       }
 
@@ -192,21 +207,33 @@ export default function Profile() {
 
   const handleLogout = async () => {
     try {
+      console.log('🚪 Profile handleLogout called')
+      
       // Clear LinkedIn session
       clearLinkedInSession()
       
       // Clear guest session if applicable
       if (isGuestUser()) {
+        console.log('🚪 Clearing guest session')
         clearGuestSession()
       }
       
       // Sign out from Supabase
-      await supabase.auth.signOut()
+      console.log('🚪 Signing out from Supabase')
+      const { error: signOutError } = await supabase.auth.signOut()
       
+      if (signOutError) {
+        console.error('❌ Supabase signOut error:', signOutError)
+        setError(`Logout failed: ${signOutError.message}`)
+        return
+      }
+      
+      console.log('✅ Successfully signed out, navigating to login')
       // Redirect to login
       navigate('/login')
     } catch (error) {
-      console.error('Error logging out:', error)
+      console.error('❌ Error logging out:', error)
+      setError(`Logout failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

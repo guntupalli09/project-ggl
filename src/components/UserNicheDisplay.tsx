@@ -64,7 +64,7 @@ const UserNicheDisplay: React.FC = () => {
         .from('user_settings')
         .select('*')
         .eq('user_id', user?.id)
-        .single()
+        .maybeSingle()
 
       if (settingsError) {
         throw settingsError
@@ -87,7 +87,7 @@ const UserNicheDisplay: React.FC = () => {
             .from('niche_templates')
             .select('*')
             .eq('id', settings.niche_template_id)
-            .single()
+            .maybeSingle()
 
           if (templateError) {
             console.error('Error fetching niche template:', templateError)

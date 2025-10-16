@@ -43,14 +43,23 @@ export default function Login() {
     }
   }
 
+  const generateGuestUUID = () => {
+    // Generate a UUID v4 for guest users
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0
+      const v = c === 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
+  }
+
   const handleGuestLogin = async () => {
     setError('')
     setGuestLoading(true)
 
     try {
-      // Create a mock guest user session
+      // Create a mock guest user session with proper UUID
       const guestUser = {
-        id: 'guest-' + Date.now(),
+        id: generateGuestUUID(),
         email: 'guest@example.com',
         user_metadata: {
           is_guest: true,

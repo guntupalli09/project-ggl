@@ -5,7 +5,9 @@ import GoogleCalendarIntegration from '../components/GoogleCalendarIntegration'
 import BookingSystem from '../components/BookingSystem'
 import CalendarAutomation from '../components/CalendarAutomation'
 import CalendarAnalytics from '../components/CalendarAnalytics'
+import GuestModeWarning from '../components/GuestModeWarning'
 import { googleCalendarAuth } from '../lib/googleCalendarAuth'
+import { isGuestUser } from '../lib/authUtils'
 import { 
   CalendarIcon, 
   ClockIcon, 
@@ -244,6 +246,15 @@ export default function Calendar() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Guest Mode Warning */}
+        {isGuestUser() && (
+          <GuestModeWarning 
+            feature="Calendar Integration"
+            description="Calendar integration is not available in guest mode. Sign in to connect your Google Calendar and manage appointments."
+            actionText="Sign in to connect your Google Calendar"
+          />
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -254,10 +265,12 @@ export default function Calendar() {
               </p>
             </div>
             
-            {/* Google Calendar Integration */}
-            <div className="flex items-center space-x-4">
-              <GoogleCalendarIntegration onConnectionChange={setGoogleCalendarConnected} />
-            </div>
+            {/* Google Calendar Integration - Disabled for guest users */}
+            {!isGuestUser() && (
+              <div className="flex items-center space-x-4">
+                <GoogleCalendarIntegration onConnectionChange={setGoogleCalendarConnected} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -342,16 +355,26 @@ export default function Calendar() {
 
           {activeTab === 'automation' && (
             <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Calendar Automation
-                </h2>
-                <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                  <PlusIcon className="h-4 w-4 mr-2" />
-                  New Automation
-                </button>
-              </div>
-              <CalendarAutomation />
+              {isGuestUser() ? (
+                <GuestModeWarning 
+                  feature="Calendar Automation"
+                  description="Calendar automation features are not available in guest mode. Sign in to create and manage automated calendar workflows."
+                  actionText="Sign in to access calendar automation"
+                />
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      Calendar Automation
+                    </h2>
+                    <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                      <PlusIcon className="h-4 w-4 mr-2" />
+                      New Automation
+                    </button>
+                  </div>
+                  <CalendarAutomation />
+                </>
+              )}
             </div>
           )}
 

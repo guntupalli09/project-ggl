@@ -1,22 +1,41 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { getCurrentUser } from '../lib/authUtils'
+import { getCurrentUser, isGuestUser } from '../lib/authUtils'
 import SocialAccountManager from '../components/SocialAccountManager'
 import AISocialPostGenerator from '../components/AISocialPostGenerator'
 import ResponsivePageWrapper from '../components/ResponsivePageWrapper'
 import ResponsiveGrid from '../components/ResponsiveGrid'
+import GuestModeWarning from '../components/GuestModeWarning'
 
 // Connected Accounts component with shared state
 const ConnectedAccounts = ({ onAccountUpdate }: { onAccountUpdate: () => void }) => (
   <div className="space-y-6">
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
       <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Social Media Accounts</h3>
-      <SocialAccountManager onAccountUpdate={onAccountUpdate} />
+      {isGuestUser() ? (
+        <GuestModeWarning 
+          feature="Social Media Accounts"
+          description="Social media account management is not available in guest mode. Sign in to connect and manage your social media accounts."
+          actionText="Sign in to manage social media accounts"
+        />
+      ) : (
+        <SocialAccountManager onAccountUpdate={onAccountUpdate} />
+      )}
     </div>
   </div>
 )
 
-const CreatePost = () => <AISocialPostGenerator />
+const CreatePost = () => (
+  isGuestUser() ? (
+    <GuestModeWarning 
+      feature="AI Post Generator"
+      description="AI-powered post generation is not available in guest mode. Sign in to create and schedule social media posts."
+      actionText="Sign in to create social media posts"
+    />
+  ) : (
+    <AISocialPostGenerator />
+  )
+)
 
 const UpcomingPosts = () => (
   <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
@@ -210,7 +229,14 @@ export default function SocialAutomation() {
       title="Social Media" 
       description="Manage your social media presence with automated posting and scheduling"
     >
-
+      {/* Guest Mode Warning */}
+      {isGuestUser() && (
+        <GuestModeWarning 
+          feature="Social Media Integration"
+          description="Social media integration is not available in guest mode. Sign in to connect your social media accounts and manage automated posting."
+          actionText="Sign in to connect your social media accounts"
+        />
+      )}
 
         {/* Tab Navigation */}
         <div className="mb-6">
