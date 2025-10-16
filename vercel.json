@@ -1,19 +1,61 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/followups",
-      "schedule": "0 9 * * *"
-    }
-  ],
   "functions": {
-    "api/cron/followups.ts": {
-      "maxDuration": 300
+    "api/consolidated.ts": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "source": "/api/health",
+      "destination": "/api/consolidated?action=health"
+    },
+    {
+      "source": "/api/bookings/complete",
+      "destination": "/api/consolidated?action=booking-complete"
+    },
+    {
+      "source": "/api/leads/workflow",
+      "destination": "/api/consolidated?action=lead-workflow"
+    },
+    {
+      "source": "/api/referral/generate",
+      "destination": "/api/consolidated?action=referral-generate"
+    },
+    {
+      "source": "/api/feedback/request",
+      "destination": "/api/consolidated?action=feedback-request"
+    },
+    {
+      "source": "/api/niche-templates",
+      "destination": "/api/consolidated?action=niche-templates"
+    },
+    {
+      "source": "/api/tenant/onboarding",
+      "destination": "/api/consolidated?action=tenant-onboarding"
+    },
+    {
+      "source": "/api/workflow-logs",
+      "destination": "/api/consolidated?action=workflow-logs"
+    },
+    {
+      "source": "/api/automations/review-referral",
+      "destination": "/api/consolidated?action=automation-review-referral"
+    },
+    {
+      "source": "/api/automations/speedToLead",
+      "destination": "/api/consolidated?action=automation-speed-to-lead"
+    },
+    {
+      "source": "/api/cron/followups",
+      "destination": "/api/consolidated?action=cron-followups"
+    },
+    {
+      "source": "/api/email/send",
+      "destination": "/api/consolidated?action=email-send"
+    },
+    {
+      "source": "/api/twilio/incoming-call",
+      "destination": "/api/consolidated?action=twilio-incoming-call"
     }
   ]
 }

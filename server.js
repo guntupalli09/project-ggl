@@ -1389,9 +1389,587 @@ app.post('/api/test/create-booking', async (req, res) => {
   }
 })
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() })
+// Health check endpoint (moved from Vercel function)
+app.get('/api/health', async (req, res) => {
+  const startTime = Date.now()
+  
+  try {
+    // Check database connectivity
+    const { error } = await supabase
+      .from('user_settings')
+      .select('count')
+      .limit(1)
+
+    const dbHealthy = !error
+
+    // Check environment variables
+    const envHealthy = !!(
+      process.env.SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+
+    // Check external services
+    const externalServices = {
+      supabase: dbHealthy,
+      environment: envHealthy
+    }
+
+    const allHealthy = Object.values(externalServices).every(Boolean)
+    const responseTime = Date.now() - startTime
+
+    const healthStatus = {
+      status: allHealthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      services: externalServices,
+      version: process.env.npm_package_version || '1.0.0',
+      environment: process.env.NODE_ENV || 'development'
+    }
+
+    const statusCode = allHealthy ? 200 : 503
+    res.status(statusCode).json(healthStatus)
+
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      services: {
+        supabase: false,
+        environment: false
+      }
+    })
+  }
 })
+
+// Workflow logs endpoint (moved from Vercel function)
+app.get('/api/workflow-logs', async (req, res) => {
+  try {
+    console.log('📊 Fetching workflow logs via API...')
+    
+    const { data, error } = await supabase
+      .from('automation_logs')
+      .select('*')
+      .order('executed_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('❌ Error fetching logs:', error)
+      return res.status(500).json({ error: 'Failed to fetch logs' })
+    }
+
+    console.log('✅ Fetched logs:', data.length)
+    return res.status(200).json({ logs: data || [] })
+  } catch (error) {
+    console.error('❌ Error in workflow-logs API:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Consolidated API endpoint (moved from Vercel function)
+app.all('/api/consolidated', async (req, res) => {
+  const { method, query, body } = req
+  const { action } = query
+
+  try {
+    switch (action) {
+      case 'health':
+        return await handleHealth(req, res)
+      
+      case 'booking-complete':
+        return await handleBookingComplete(req, res)
+      
+      case 'lead-workflow':
+        return await handleLeadWorkflow(req, res)
+      
+      case 'referral-generate':
+        return await handleReferralGenerate(req, res)
+      
+      case 'feedback-request':
+        return await handleFeedbackRequest(req, res)
+      
+      case 'niche-templates':
+        return await handleNicheTemplates(req, res)
+      
+      case 'tenant-onboarding':
+        return await handleTenantOnboarding(req, res)
+      
+      case 'workflow-logs':
+        return await handleWorkflowLogs(req, res)
+      
+      case 'automation-review-referral':
+        return await handleAutomationReviewReferral(req, res)
+      
+      case 'automation-speed-to-lead':
+        return await handleAutomationSpeedToLead(req, res)
+      
+      case 'cron-followups':
+        return await handleCronFollowups(req, res)
+      
+      case 'email-send':
+        return await handleEmailSend(req, res)
+      
+      case 'twilio-incoming-call':
+        return await handleTwilioIncomingCall(req, res)
+      
+      default:
+        return res.status(400).json({ error: 'Invalid action' })
+    }
+  } catch (error) {
+    console.error('API Error:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Helper functions for consolidated API
+async function handleHealth(req, res) {
+  const { error } = await supabase
+    .from('user_settings')
+    .select('count')
+    .limit(1)
+
+  const dbHealthy = !error
+  const timestamp = new Date().toISOString()
+
+  res.status(200).json({
+    status: 'ok',
+    timestamp,
+    services: {
+      database: dbHealthy ? 'healthy' : 'unhealthy',
+      api: 'healthy'
+    }
+  })
+}
+
+async function handleBookingComplete(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { bookingId, userId } = req.body
+
+  if (!bookingId || !userId) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Update booking status
+  const { error: updateError } = await supabase
+    .from('bookings')
+    .update({ 
+      status: 'completed',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', bookingId)
+    .eq('user_id', userId)
+
+  if (updateError) {
+    return res.status(500).json({ error: 'Failed to update booking' })
+  }
+
+  // Trigger workflow automation
+  const { error: workflowError } = await supabase
+    .from('workflow_automations')
+    .insert({
+      user_id: userId,
+      lead_id: null,
+      action_type: 'service_completed',
+      status: 'pending',
+      trigger_event: 'booking_completed',
+      metadata: { booking_id: bookingId }
+    })
+
+  if (workflowError) {
+    console.error('Workflow error:', workflowError)
+  }
+
+  res.status(200).json({ success: true, message: 'Booking completed successfully' })
+}
+
+async function handleLeadWorkflow(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { leadId, userId, newStage } = req.body
+
+  if (!leadId || !userId || !newStage) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Update lead stage
+  const { error: updateError } = await supabase
+    .from('leads')
+    .update({ 
+      workflow_stage: newStage,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', leadId)
+    .eq('user_id', userId)
+
+  if (updateError) {
+    return res.status(500).json({ error: 'Failed to update lead' })
+  }
+
+  // Log workflow change
+  const { error: logError } = await supabase
+    .from('automation_logs')
+    .insert({
+      user_id: userId,
+      lead_id: leadId,
+      action_type: 'workflow_stage_change',
+      status: 'success',
+      trigger_event: 'manual_update',
+      executed_at: new Date().toISOString(),
+      metadata: { new_stage: newStage }
+    })
+
+  if (logError) {
+    console.error('Log error:', logError)
+  }
+
+  res.status(200).json({ success: true, message: 'Lead workflow updated' })
+}
+
+async function handleReferralGenerate(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { lead_id, user_id } = req.body
+
+  if (!lead_id || !user_id) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Generate referral link
+  const { data: referralLink, error: referralError } = await supabase
+    .from('referral_links')
+    .insert({
+      user_id,
+      lead_id,
+      token: crypto.randomUUID(),
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    })
+    .select()
+    .single()
+
+  if (referralError) {
+    return res.status(500).json({ error: 'Failed to create referral link' })
+  }
+
+  const baseUrl = process.env.NODE_ENV === 'production' 
+    ? 'https://www.getgetleads.com'
+    : 'http://localhost:5173'
+
+  const referralUrl = `${baseUrl}/referral/${referralLink.token}`
+
+  res.status(200).json({
+    success: true,
+    referral_link: {
+      id: referralLink.id,
+      token: referralLink.token,
+      url: referralUrl,
+      expires_at: referralLink.expires_at
+    }
+  })
+}
+
+async function handleFeedbackRequest(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { lead_id, user_id, message } = req.body
+
+  if (!lead_id || !user_id) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Create feedback request
+  const { data: feedbackRequest, error } = await supabase
+    .from('feedback_requests')
+    .insert({
+      user_id,
+      lead_id,
+      message_content: message || 'Thank you for your recent visit! We would love to hear your feedback.',
+      status: 'pending'
+    })
+    .select()
+    .single()
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to create feedback request' })
+  }
+
+  res.status(200).json({
+    success: true,
+    feedback_request: feedbackRequest
+  })
+}
+
+async function handleNicheTemplates(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { data: templates, error } = await supabase
+    .from('niche_templates')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch templates' })
+  }
+
+  res.status(200).json({ success: true, templates })
+}
+
+async function handleTenantOnboarding(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { user_id, niche_template_id, business_name } = req.body
+
+  if (!user_id || !niche_template_id || !business_name) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Generate subdomain
+  const subdomain = business_name.toLowerCase().replace(/[^a-z0-9]/g, '') + Math.random().toString(36).substr(2, 4)
+  const sending_domain = `reviews.${subdomain}`
+
+  // Update user settings
+  const { error: updateError } = await supabase
+    .from('user_settings')
+    .update({
+      niche_template_id,
+      subdomain,
+      sending_domain,
+      business_name,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', user_id)
+
+  if (updateError) {
+    return res.status(500).json({ error: 'Failed to update user settings' })
+  }
+
+  res.status(200).json({
+    success: true,
+    subdomain,
+    sending_domain
+  })
+}
+
+async function handleWorkflowLogs(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { user_id, limit = 50 } = req.query
+
+  if (!user_id) {
+    return res.status(400).json({ error: 'user_id is required' })
+  }
+
+  const { data: logs, error } = await supabase
+    .from('automation_logs')
+    .select('*')
+    .eq('user_id', user_id)
+    .order('executed_at', { ascending: false })
+    .limit(parseInt(limit))
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch logs' })
+  }
+
+  res.status(200).json({ success: true, logs })
+}
+
+async function handleAutomationReviewReferral(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { lead_id, user_id } = req.body
+
+  if (!lead_id || !user_id) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Create review request
+  const { data: reviewRequest, error: reviewError } = await supabase
+    .from('feedback_requests')
+    .insert({
+      user_id,
+      lead_id,
+      message_content: 'Thank you for your recent visit! We would love to hear your feedback.',
+      status: 'pending'
+    })
+    .select()
+    .single()
+
+  if (reviewError) {
+    return res.status(500).json({ error: 'Failed to create review request' })
+  }
+
+  // Create referral offer
+  const { data: referralOffer, error: referralError } = await supabase
+    .from('referral_requests')
+    .insert({
+      user_id,
+      lead_id,
+      offer_message: 'Refer a friend and get a special discount!',
+      status: 'pending'
+    })
+    .select()
+    .single()
+
+  if (referralError) {
+    console.error('Referral error:', referralError)
+  }
+
+  res.status(200).json({
+    success: true,
+    review_request: reviewRequest,
+    referral_offer: referralOffer
+  })
+}
+
+async function handleAutomationSpeedToLead(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { lead_id, user_id, message } = req.body
+
+  if (!lead_id || !user_id) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Send immediate follow-up
+  const { error } = await supabase
+    .from('automation_logs')
+    .insert({
+      user_id,
+      lead_id,
+      action_type: 'immediate_followup',
+      status: 'completed',
+      trigger_event: 'lead_created',
+      executed_at: new Date().toISOString(),
+      metadata: { message: message || 'Thank you for your interest! We will contact you soon.' }
+    })
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to send follow-up' })
+  }
+
+  res.status(200).json({ success: true, message: 'Follow-up sent' })
+}
+
+async function handleCronFollowups(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Process pending followups
+  const { data: followups, error } = await supabase
+    .from('automation_logs')
+    .select('*')
+    .eq('status', 'pending')
+    .lte('scheduled_for', new Date().toISOString())
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch followups' })
+  }
+
+  // Process each followup
+  for (const followup of followups || []) {
+    // Update status to completed
+    await supabase
+      .from('automation_logs')
+      .update({ 
+        status: 'completed',
+        executed_at: new Date().toISOString()
+      })
+      .eq('id', followup.id)
+  }
+
+  res.status(200).json({ 
+    success: true, 
+    processed: followups?.length || 0 
+  })
+}
+
+async function handleEmailSend(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { to, subject, body, user_id } = req.body
+
+  if (!to || !subject || !body || !user_id) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Log email send
+  const { error } = await supabase
+    .from('automation_logs')
+    .insert({
+      user_id,
+      action_type: 'email_sent',
+      status: 'completed',
+      trigger_event: 'manual',
+      executed_at: new Date().toISOString(),
+      metadata: { to, subject, body }
+    })
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to log email' })
+  }
+
+  res.status(200).json({ success: true, message: 'Email logged' })
+}
+
+async function handleTwilioIncomingCall(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { From, To } = req.body
+
+  if (!From || !To) {
+    return res.status(400).json({ error: 'Missing phone numbers' })
+  }
+
+  // Create lead from missed call
+  const { data: lead, error } = await supabase
+    .from('leads')
+    .insert({
+      name: 'Missed Call',
+      phone: From,
+      source: 'missed_call',
+      status: 'new',
+      workflow_stage: 'missed_call',
+      user_id: null // Will be updated based on phone number lookup
+    })
+    .select()
+    .single()
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to create lead' })
+  }
+
+  res.status(200).json({ 
+    success: true, 
+    lead_id: lead.id,
+    message: 'Lead created from missed call'
+  })
+}
 
 // Initialize workflow engine
 async function initializeWorkflowEngine() {

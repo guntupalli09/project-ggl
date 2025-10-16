@@ -29,7 +29,7 @@ export default async function handler(req: any, res: any) {
       }
 
       // Get user's niche configuration
-      const { data: nicheConfig, error: configError } = await supabase
+      const { error: configError } = await supabase
         .rpc('get_user_niche_config', { user_uuid: user_id })
 
       if (configError) {

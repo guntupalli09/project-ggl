@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Analytics from './pages/Analytics'
+import Dashboard from './pages/Dashboard'
 import Contacts from './pages/Contacts'
 import SocialAutomation from './pages/SocialAutomation'
 import Profile from './pages/Profile'
@@ -47,7 +48,7 @@ function App() {
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
           <AppStatus />
           <Routes>
-          <Route path="/" element={<Navigate to="/analytics" replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
               <Route path="/onboarding" element={<Onboarding />} />
@@ -62,6 +63,7 @@ function App() {
             <ProtectedRoute>
               <ResponsiveLayout>
                 <Routes>
+                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/contacts" element={<Contacts />} />
                   <Route path="/social-automation" element={<SocialAutomation />} />

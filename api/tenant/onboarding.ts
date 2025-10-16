@@ -40,7 +40,7 @@ export default async function handler(req: any, res: any) {
       const sending_domain = `reviews.${subdomain}`
 
       // Update user settings with niche configuration
-      const { data: updatedSettings, error: updateError } = await supabase
+      const { error: updateError } = await supabase
         .from('user_settings')
         .update({
           niche_template_id,
@@ -59,7 +59,7 @@ export default async function handler(req: any, res: any) {
       }
 
       // Create tenant domain record
-      const { data: tenantDomain, error: domainError } = await supabase
+      const { error: domainError } = await supabase
         .from('tenant_domains')
         .insert({
           user_id,

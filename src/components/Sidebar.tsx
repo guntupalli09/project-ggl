@@ -10,6 +10,16 @@ interface SidebarProps {
 
 const navigation = [
   {
+    name: 'Dashboard',
+    href: '/dashboard',
+    icon: (props: any) => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" />
+      </svg>
+    )
+  },
+  {
     name: 'Analytics',
     href: '/analytics',
     icon: (props: any) => (
@@ -128,12 +138,19 @@ export default function Sidebar({ isOpen, onClose, isMobile = false, isTablet = 
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div className="flex items-center min-w-0">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <span className="ml-3 text-lg font-bold text-gray-900 dark:text-white truncate">Project GGL</span>
+              <div className="ml-3 min-w-0 flex-1">
+                <div className="text-lg font-bold text-gray-900 dark:text-white truncate">
+                  GetGetLeads
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  Lead to Booking Engine
+                </div>
+              </div>
             </div>
             <div className="flex items-center space-x-2">
               {/* Theme Toggle */}
