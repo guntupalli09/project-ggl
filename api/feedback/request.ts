@@ -80,7 +80,7 @@ export default async function handler(req: any, res: any) {
           executed_at: new Date().toISOString(),
           metadata: {
             feedback_type: finalFeedbackType,
-            delay_hours,
+            delay_hours: delayHours,
             scheduled_for: feedbackRequest.scheduled_for
           }
         })

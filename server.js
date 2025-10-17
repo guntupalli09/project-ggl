@@ -4063,6 +4063,297 @@ function extractBusinessInfo(prompt, field) {
   return match ? match[1].trim() : 'Your Business'
 }
 
+// ===== MOVED API ENDPOINTS TO REDUCE VERCEL SERVERLESS FUNCTION COUNT =====
+
+// Niche Templates API (moved from api/niche-templates.ts)
+app.get('/api/niche-templates', async (req, res) => {
+  try {
+    // Get all active niche templates
+    const { data: templates, error } = await supabase
+      .from('niche_templates')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_name')
+
+    if (error) {
+      console.error('Error fetching niche templates:', error)
+      return res.status(500).json({ error: 'Failed to fetch niche templates' })
+    }
+
+    res.status(200).json({
+      success: true,
+      templates: templates || []
+    })
+  } catch (error) {
+    console.error('Niche templates API error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Leads Create API (moved from api/leads/create.ts)
+app.post('/api/leads/create', async (req, res) => {
+  try {
+    const { name, email, phone, message, business_slug, source } = req.body
+
+    // Validate required fields
+    if (!name || !email || !business_slug) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: name, email, business_slug' 
+      })
+    }
+
+    // Get business owner's user_id from business_slug
+    const { data: businessData, error: businessError } = await supabase
+      .from('user_settings')
+      .select('user_id, business_name')
+      .eq('business_slug', business_slug)
+      .single()
+
+    if (businessError || !businessData) {
+      console.error('Business not found:', businessError)
+      return res.status(404).json({ error: 'Business not found' })
+    }
+
+    // Create the lead
+    const { data: leadData, error: leadError } = await supabase
+      .from('leads')
+      .insert([{
+        user_id: businessData.user_id,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone?.trim() || null,
+        source: source || 'HostedForm',
+        status: 'new',
+        notes: message?.trim() || null
+      }])
+      .select('id, name, email, status, created_at')
+      .single()
+
+    if (leadError) {
+      console.error('Error creating lead:', leadError)
+      return res.status(500).json({ 
+        error: 'Failed to create lead',
+        details: leadError.message 
+      })
+    }
+
+    // Log the lead creation for analytics
+    console.log(`New lead created via hosted form:`, {
+      lead_id: leadData.id,
+      business_slug,
+      business_name: businessData.business_name,
+      lead_name: leadData.name,
+      lead_email: leadData.email
+    })
+
+    return res.status(201).json({
+      success: true,
+      lead_id: leadData.id,
+      message: 'Lead created successfully'
+    })
+
+  } catch (error) {
+    console.error('Error in leads/create API:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+})
+
+// Bookings Complete API (moved from api/bookings/complete.ts)
+app.post('/api/bookings/complete', async (req, res) => {
+  try {
+    const { booking_id, user_id, service_notes } = req.body
+
+    // Validate required fields
+    if (!booking_id || !user_id) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: booking_id, user_id' 
+      })
+    }
+
+    // Update booking status to completed
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .update({
+        status: 'completed',
+        service_completed_at: new Date().toISOString(),
+        service_completed_by: user_id,
+        service_notes: service_notes || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', booking_id)
+      .eq('user_id', user_id)
+      .select(`
+        id,
+        customer_name,
+        customer_email,
+        customer_phone,
+        service_type,
+        appointment_time,
+        user_id,
+        leads!inner(id, name, email, phone)
+      `)
+      .single()
+
+    if (bookingError || !booking) {
+      console.error('Error updating booking:', bookingError)
+      return res.status(500).json({ 
+        error: 'Failed to complete booking',
+        details: bookingError?.message 
+      })
+    }
+
+    // Get business settings for workflow data
+    const { data: businessSettings } = await supabase
+      .from('user_settings')
+      .select('business_name, niche_template_id')
+      .eq('user_id', user_id)
+      .single()
+
+    // Prepare workflow data
+    const workflowData = {
+      booking_id: booking.id,
+      lead_id: booking.leads?.id,
+      user_id: booking.user_id,
+      business_name: businessSettings?.business_name || 'Our Business',
+      customer_name: booking.customer_name,
+      customer_email: booking.customer_email,
+      customer_phone: booking.customer_phone,
+      service_type: booking.service_type,
+      booking_time: booking.appointment_time,
+      service_notes: service_notes
+    }
+
+    // Trigger post-service workflow
+    try {
+      const { workflowEngine } = await import('./src/lib/workflowEngine.js')
+      
+      // Trigger review request workflow
+      await workflowEngine.triggerWorkflow('booking_completed', workflowData)
+      
+      console.log(`✅ Service completed and workflow triggered for booking ${booking_id}`)
+    } catch (workflowError) {
+      console.error('Error triggering workflow:', workflowError)
+      // Don't fail the booking completion if workflow fails
+    }
+
+    // Log the completion
+    console.log(`Service completed:`, {
+      booking_id: booking.id,
+      customer: booking.customer_name,
+      service: booking.service_type,
+      completed_by: user_id
+    })
+
+    return res.status(200).json({
+      success: true,
+      message: 'Service completed successfully',
+      booking: {
+        id: booking.id,
+        status: 'completed',
+        service_completed_at: booking.service_completed_at
+      }
+    })
+
+  } catch (error) {
+    console.error('Error in booking completion:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+})
+
+// Tenant Onboarding API (moved from api/tenant/onboarding.ts)
+app.post('/api/tenant/onboarding', async (req, res) => {
+  try {
+    const { user_id, niche_template_id, business_name } = req.body
+
+    if (!user_id || !niche_template_id || !business_name) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: user_id, niche_template_id, business_name' 
+      })
+    }
+
+    // Get niche template configuration
+    const { data: template, error: templateError } = await supabase
+      .from('niche_templates')
+      .select('*')
+      .eq('id', niche_template_id)
+      .single()
+
+    if (templateError || !template) {
+      return res.status(404).json({ error: 'Niche template not found' })
+    }
+
+    // Generate subdomain
+    const { data: subdomainResult, error: subdomainError } = await supabase
+      .rpc('generate_subdomain', { business_name })
+
+    if (subdomainError) {
+      console.error('Error generating subdomain:', subdomainError)
+      return res.status(500).json({ error: 'Failed to generate subdomain' })
+    }
+
+    const subdomain = subdomainResult
+    const sending_domain = `reviews.${subdomain}`
+
+    // Update user settings with niche configuration
+    const { error: updateError } = await supabase
+      .from('user_settings')
+      .update({
+        niche_template_id,
+        subdomain,
+        sending_domain,
+        business_name,
+        workflow_stage: 'new'
+      })
+      .eq('user_id', user_id)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Error updating user settings:', updateError)
+      return res.status(500).json({ error: 'Failed to update user settings' })
+    }
+
+    // Create tenant domain record
+    const { error: domainError } = await supabase
+      .from('tenant_domains')
+      .insert({
+        user_id,
+        subdomain,
+        sending_domain,
+        status: 'pending'
+      })
+      .select()
+      .single()
+
+    if (domainError) {
+      console.error('Error creating tenant domain:', domainError)
+      // Don't fail the request, just log the error
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Niche configuration applied successfully',
+      config: {
+        niche_template: template,
+        subdomain,
+        sending_domain,
+        workflow_stages: template.config.workflow_stages,
+        automation_rules: template.config.automation_rules
+      }
+    })
+
+  } catch (error) {
+    console.error('Tenant onboarding error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 app.listen(PORT, async () => {
   console.log(`🚀 Development API server running on http://localhost:${PORT}`)
   console.log(`📱 Frontend should be running on http://localhost:5173`)
