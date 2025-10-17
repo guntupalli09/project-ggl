@@ -9,7 +9,10 @@ import {
   PhoneIcon,
   GlobeAltIcon,
   UserGroupIcon,
-  ArrowTrendingUpIcon
+  ArrowTrendingUpIcon,
+  EnvelopeIcon,
+  ChartBarIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline'
 
 interface DashboardMetrics {
@@ -24,6 +27,12 @@ interface DashboardMetrics {
   }[]
   missedCalls: number
   aiFollowupsSent: number
+  emailMetrics: {
+    totalSent: number
+    deliveryRate: number
+    openRate: number
+    clickRate: number
+  }
 }
 
 export default function Dashboard() {
@@ -54,8 +63,8 @@ export default function Dashboard() {
       startDate.setDate(startDate.getDate() - days)
       const startDateISO = startDate.toISOString()
 
-      // Fetch data for the 5 core metrics
-      const [leadsData, bookingsData, messagesData, callLogsData] = await Promise.all([
+      // Fetch data for the 5 core metrics + email metrics
+      const [leadsData, bookingsData, messagesData, callLogsData, emailLogsData] = await Promise.all([
         // All leads in time range
         supabase
           .from('leads')
@@ -83,18 +92,27 @@ export default function Dashboard() {
           .from('call_logs')
           .select('call_type, ai_followup_sent, created_at')
           .eq('user_id', userId)
-          .gte('created_at', startDateISO)
+          .gte('created_at', startDateISO),
+
+        // All email logs in time range
+        supabase
+          .from('email_logs')
+          .select('status, sent_at, campaign_type')
+          .eq('user_id', userId)
+          .gte('sent_at', startDateISO)
       ])
 
       if (leadsData.error) throw leadsData.error
       if (bookingsData.error) throw bookingsData.error
       if (messagesData.error) throw messagesData.error
       if (callLogsData.error) throw callLogsData.error
+      if (emailLogsData.error) throw emailLogsData.error
 
       const leads = leadsData.data || []
       const bookings = bookingsData.data || []
       const messages = messagesData.data || []
       const callLogs = callLogsData.data || []
+      const emailLogs = emailLogsData.data || []
 
       // 1. Calculate Reply-to-Book Rate
       const leadsWithReplies = new Set(messages.map(m => m.lead_id))
@@ -147,12 +165,32 @@ export default function Dashboard() {
       // 5. Calculate AI Follow-ups Sent
       const aiFollowupsSent = callLogs.filter(call => call.ai_followup_sent).length
 
+      // 6. Calculate Email Metrics
+      const totalSent = emailLogs.length
+      const delivered = emailLogs.filter(email => 
+        email.status === 'delivered' || email.status === 'opened' || email.status === 'clicked'
+      ).length
+      const opened = emailLogs.filter(email => 
+        email.status === 'opened' || email.status === 'clicked'
+      ).length
+      const clicked = emailLogs.filter(email => email.status === 'clicked').length
+
+      const deliveryRate = totalSent > 0 ? Math.round((delivered / totalSent) * 100) : 0
+      const openRate = delivered > 0 ? Math.round((opened / delivered) * 100) : 0
+      const clickRate = delivered > 0 ? Math.round((clicked / delivered) * 100) : 0
+
       setMetrics({
         replyToBookRate,
         weeklyBookings,
         leadsConvertedToBookings,
         missedCalls,
-        aiFollowupsSent
+        aiFollowupsSent,
+        emailMetrics: {
+          totalSent,
+          deliveryRate,
+          openRate,
+          clickRate
+        }
       })
 
     } catch (err) {
@@ -265,7 +303,7 @@ export default function Dashboard() {
         </div>
 
         {/* Core Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {/* Reply-to-Book Rate */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -337,6 +375,72 @@ export default function Dashboard() {
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Email Metrics Section */}
+        <div className="mt-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Email Performance</h2>
+            <p className="text-gray-600 dark:text-gray-400">Track your email marketing effectiveness</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Total Emails Sent */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Emails Sent</CardTitle>
+                <EnvelopeIcon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-600">{metrics.emailMetrics.totalSent}</div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Total emails sent in the last {timeRange}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Delivery Rate */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Delivery Rate</CardTitle>
+                <ChartBarIcon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">{metrics.emailMetrics.deliveryRate}%</div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Emails successfully delivered
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Open Rate */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Open Rate</CardTitle>
+                <EyeIcon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-purple-600">{metrics.emailMetrics.openRate}%</div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Emails opened by recipients
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Click Rate */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Click Rate</CardTitle>
+                <ArrowTrendingUpIcon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-indigo-600">{metrics.emailMetrics.clickRate}%</div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Links clicked in emails
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Lead Conversion by Source */}

@@ -3216,6 +3216,853 @@ async function deleteCalendarEvent(userSettings, booking) {
   return { success: true, message: 'Calendar event deleted' }
 }
 
+// ========================================
+// EMAIL MANAGEMENT API ENDPOINTS
+// ========================================
+
+// Email Management API
+app.post('/api/email/management', async (req, res) => {
+  try {
+    const { action, user_id, filters, search, page, limit, email_id } = req.body
+
+    switch (action) {
+      case 'get_email_metrics':
+        return await handleGetEmailMetrics(req, res, user_id)
+      
+      case 'get_emails':
+        return await handleGetEmails(req, res, user_id, filters, search, page, limit)
+      
+      case 'resend_email':
+        return await handleResendEmail(req, res, user_id, email_id)
+      
+      case 'delete_email':
+        return await handleDeleteEmail(req, res, user_id, email_id)
+      
+      default:
+        return res.status(400).json({ error: 'Invalid action' })
+    }
+  } catch (error) {
+    console.error('Email management error:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Email Workflows API
+app.post('/api/email/workflows', async (req, res) => {
+  try {
+    const { action, user_id, workflow_id, workflow_data } = req.body
+
+    switch (action) {
+      case 'get_workflows':
+        return await handleGetWorkflows(req, res, user_id)
+      
+      case 'toggle_workflow':
+        return await handleToggleWorkflow(req, res, user_id, workflow_id)
+      
+      case 'enhance_workflow':
+        return await handleEnhanceWorkflow(req, res, user_id, workflow_id)
+      
+      case 'create_workflow':
+        return await handleCreateWorkflow(req, res, user_id, workflow_data)
+      
+      case 'update_workflow':
+        return await handleUpdateWorkflow(req, res, user_id, workflow_id, workflow_data)
+      
+      case 'delete_workflow':
+        return await handleDeleteWorkflow(req, res, user_id, workflow_id)
+      
+      default:
+        return res.status(400).json({ error: 'Invalid action' })
+    }
+  } catch (error) {
+    console.error('Email workflows error:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Email Management Handlers
+async function handleGetEmailMetrics(req, res, userId) {
+  try {
+    // Get email logs for the user
+    const { data: emailLogs, error } = await supabase
+      .from('email_logs')
+      .select('status, sent_at, campaign_type')
+      .eq('user_id', userId)
+      .gte('sent_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
+
+    if (error) throw error
+
+    const totalSent = emailLogs?.length || 0
+    const delivered = emailLogs?.filter(log => 
+      ['delivered', 'opened', 'clicked'].includes(log.status)
+    ).length || 0
+    const opened = emailLogs?.filter(log => 
+      ['opened', 'clicked'].includes(log.status)
+    ).length || 0
+    const clicked = emailLogs?.filter(log => 
+      log.status === 'clicked'
+    ).length || 0
+
+    const deliveryRate = totalSent > 0 ? Math.round((delivered / totalSent) * 100) : 0
+    const openRate = delivered > 0 ? Math.round((opened / delivered) * 100) : 0
+    const clickRate = delivered > 0 ? Math.round((clicked / delivered) * 100) : 0
+
+    // Get campaign breakdown
+    const campaignBreakdown = emailLogs?.reduce((acc, log) => {
+      acc[log.campaign_type] = (acc[log.campaign_type] || 0) + 1
+      return acc
+    }, {}) || {}
+
+    // Get recent activity (last 7 days)
+    const recentActivity = emailLogs?.filter(log => 
+      new Date(log.sent_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    ).length || 0
+
+    return res.status(200).json({
+      metrics: {
+        totalSent,
+        delivered,
+        opened,
+        clicked,
+        deliveryRate,
+        openRate,
+        clickRate,
+        campaignBreakdown,
+        recentActivity
+      }
+    })
+  } catch (error) {
+    console.error('Error getting email metrics:', error)
+    return res.status(500).json({ error: 'Failed to get email metrics' })
+  }
+}
+
+async function handleGetEmails(req, res, userId, filters, search, page, limit) {
+  try {
+    let query = supabase
+      .from('email_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .order('sent_at', { ascending: false })
+
+    // Apply filters
+    if (filters?.status && filters.status !== 'all') {
+      query = query.eq('status', filters.status)
+    }
+
+    if (filters?.campaign_type && filters.campaign_type !== 'all') {
+      query = query.eq('campaign_type', filters.campaign_type)
+    }
+
+    if (filters?.date_range && filters.date_range !== 'all') {
+      const days = parseInt(filters.date_range.replace('d', ''))
+      const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+      query = query.gte('sent_at', startDate)
+    }
+
+    // Apply search
+    if (search) {
+      query = query.or(`subject.ilike.%${search}%,customer_email.ilike.%${search}%`)
+    }
+
+    // Apply pagination
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+    query = query.range(from, to)
+
+    const { data: emails, error, count } = await query
+
+    if (error) throw error
+
+    const totalPages = Math.ceil((count || 0) / limit)
+
+    return res.status(200).json({
+      emails: emails || [],
+      totalPages,
+      currentPage: page,
+      totalCount: count || 0
+    })
+  } catch (error) {
+    console.error('Error getting emails:', error)
+    return res.status(500).json({ error: 'Failed to get emails' })
+  }
+}
+
+async function handleResendEmail(req, res, userId, emailId) {
+  try {
+    // Get the email to resend
+    const { data: email, error: fetchError } = await supabase
+      .from('email_logs')
+      .select('*')
+      .eq('id', emailId)
+      .eq('user_id', userId)
+      .single()
+
+    if (fetchError || !email) {
+      return res.status(404).json({ error: 'Email not found' })
+    }
+
+    // Update the email status to 'sent' and reset timestamps
+    const { error: updateError } = await supabase
+      .from('email_logs')
+      .update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        delivered_at: null,
+        opened_at: null,
+        clicked_at: null,
+        bounced_at: null,
+        error_message: null
+      })
+      .eq('id', emailId)
+
+    if (updateError) throw updateError
+
+    return res.status(200).json({ message: 'Email resent successfully' })
+  } catch (error) {
+    console.error('Error resending email:', error)
+    return res.status(500).json({ error: 'Failed to resend email' })
+  }
+}
+
+async function handleDeleteEmail(req, res, userId, emailId) {
+  try {
+    const { error } = await supabase
+      .from('email_logs')
+      .delete()
+      .eq('id', emailId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+
+    return res.status(200).json({ message: 'Email deleted successfully' })
+  } catch (error) {
+    console.error('Error deleting email:', error)
+    return res.status(500).json({ error: 'Failed to delete email' })
+  }
+}
+
+// Email Workflow Handlers
+async function handleGetWorkflows(req, res, userId) {
+  try {
+    const { data: workflows, error } = await supabase
+      .from('email_workflow_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+
+    // Transform the data to match the expected format
+    const transformedWorkflows = workflows?.map(workflow => ({
+      id: workflow.id,
+      name: workflow.name,
+      description: workflow.description,
+      isActive: workflow.is_active,
+      isAiEnhanced: workflow.is_ai_enhanced,
+      executionCount: workflow.execution_count,
+      lastExecuted: workflow.last_executed,
+      trigger: workflow.trigger_event,
+      campaignType: workflow.campaign_type,
+      status: workflow.is_active ? 'active' : 'inactive',
+      created_at: workflow.created_at,
+      updated_at: workflow.updated_at
+    })) || []
+
+    return res.status(200).json({
+      workflows: transformedWorkflows
+    })
+  } catch (error) {
+    console.error('Error getting workflows:', error)
+    return res.status(500).json({ error: 'Failed to get workflows' })
+  }
+}
+
+async function handleToggleWorkflow(req, res, userId, workflowId) {
+  try {
+    // First get the current workflow to toggle its status
+    const { data: workflow, error: fetchError } = await supabase
+      .from('email_workflow_settings')
+      .select('is_active')
+      .eq('id', workflowId)
+      .eq('user_id', userId)
+      .single()
+
+    if (fetchError || !workflow) {
+      return res.status(404).json({ error: 'Workflow not found' })
+    }
+
+    // Toggle the active status
+    const { error: updateError } = await supabase
+      .from('email_workflow_settings')
+      .update({ is_active: !workflow.is_active })
+      .eq('id', workflowId)
+      .eq('user_id', userId)
+
+    if (updateError) throw updateError
+
+    return res.status(200).json({ 
+      message: 'Workflow toggled successfully',
+      isActive: !workflow.is_active
+    })
+  } catch (error) {
+    console.error('Error toggling workflow:', error)
+    return res.status(500).json({ error: 'Failed to toggle workflow' })
+  }
+}
+
+async function handleEnhanceWorkflow(req, res, userId, workflowId) {
+  try {
+    const { error } = await supabase
+      .from('email_workflow_settings')
+      .update({ is_ai_enhanced: true })
+      .eq('id', workflowId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+
+    return res.status(200).json({ message: 'Workflow enhanced with AI successfully' })
+  } catch (error) {
+    console.error('Error enhancing workflow:', error)
+    return res.status(500).json({ error: 'Failed to enhance workflow' })
+  }
+}
+
+async function handleCreateWorkflow(req, res, userId, workflowData) {
+  try {
+    const { data: workflow, error } = await supabase
+      .from('email_workflow_settings')
+      .insert({
+        user_id: userId,
+        name: workflowData.name,
+        description: workflowData.description,
+        campaign_type: workflowData.campaignType,
+        trigger_event: workflowData.trigger,
+        niche: workflowData.niche,
+        business_type: workflowData.businessType,
+        is_active: workflowData.isActive || false,
+        is_ai_enhanced: workflowData.isAiEnhanced || false
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return res.status(201).json({ 
+      message: 'Workflow created successfully',
+      workflow: {
+        id: workflow.id,
+        name: workflow.name,
+        description: workflow.description,
+        isActive: workflow.is_active,
+        isAiEnhanced: workflow.is_ai_enhanced,
+        executionCount: workflow.execution_count,
+        lastExecuted: workflow.last_executed,
+        trigger: workflow.trigger_event,
+        campaignType: workflow.campaign_type,
+        status: workflow.is_active ? 'active' : 'inactive',
+        created_at: workflow.created_at,
+        updated_at: workflow.updated_at
+      }
+    })
+  } catch (error) {
+    console.error('Error creating workflow:', error)
+    return res.status(500).json({ error: 'Failed to create workflow' })
+  }
+}
+
+async function handleUpdateWorkflow(req, res, userId, workflowId, workflowData) {
+  try {
+    const { error } = await supabase
+      .from('email_workflow_settings')
+      .update({
+        name: workflowData.name,
+        description: workflowData.description,
+        campaign_type: workflowData.campaignType,
+        trigger_event: workflowData.trigger,
+        niche: workflowData.niche,
+        business_type: workflowData.businessType,
+        is_active: workflowData.isActive,
+        is_ai_enhanced: workflowData.isAiEnhanced
+      })
+      .eq('id', workflowId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+
+    return res.status(200).json({ message: 'Workflow updated successfully' })
+  } catch (error) {
+    console.error('Error updating workflow:', error)
+    return res.status(500).json({ error: 'Failed to update workflow' })
+  }
+}
+
+async function handleDeleteWorkflow(req, res, userId, workflowId) {
+  try {
+    const { error } = await supabase
+      .from('email_workflow_settings')
+      .delete()
+      .eq('id', workflowId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+
+    return res.status(200).json({ message: 'Workflow deleted successfully' })
+  } catch (error) {
+    console.error('Error deleting workflow:', error)
+    return res.status(500).json({ error: 'Failed to delete workflow' })
+  }
+}
+
+// ========================================
+// EMAIL SEND CAMPAIGN API ENDPOINT
+// ========================================
+
+app.post('/api/email/send-campaign', async (req, res) => {
+  try {
+    const { campaign_id, user_id } = req.body
+
+    if (!campaign_id || !user_id) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    // Get campaign details
+    const { data: campaign, error: campaignError } = await supabase
+      .from('email_campaigns')
+      .select('*')
+      .eq('id', campaign_id)
+      .eq('user_id', user_id)
+      .single()
+
+    if (campaignError || !campaign) {
+      return res.status(404).json({ error: 'Campaign not found' })
+    }
+
+    // Get leads to send to (for now, all leads with emails)
+    const { data: leads, error: leadsError } = await supabase
+      .from('leads')
+      .select('id, name, email')
+      .eq('user_id', user_id)
+      .not('email', 'is', null)
+
+    if (leadsError) {
+      return res.status(500).json({ error: 'Failed to fetch leads' })
+    }
+
+    if (!leads || leads.length === 0) {
+      return res.status(400).json({ error: 'No leads with email addresses found' })
+    }
+
+    // Send emails (simulate for now)
+    const emailLogs = leads.map(lead => ({
+      user_id,
+      lead_id: lead.id,
+      recipient_email: lead.email,
+      recipient_name: lead.name,
+      subject: campaign.subject,
+      content: campaign.content,
+      campaign_type: campaign.campaign_type,
+      status: 'sent'
+    }))
+
+    // Insert email logs
+    const { error: logsError } = await supabase
+      .from('email_logs')
+      .insert(emailLogs)
+
+    if (logsError) {
+      return res.status(500).json({ error: 'Failed to log emails' })
+    }
+
+    // Update campaign
+    const { error: updateError } = await supabase
+      .from('email_campaigns')
+      .update({
+        sent_count: leads.length,
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      })
+      .eq('id', campaign_id)
+
+    if (updateError) {
+      return res.status(500).json({ error: 'Failed to update campaign' })
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: `Campaign sent to ${leads.length} leads`,
+      sent_count: leads.length
+    })
+  } catch (error) {
+    console.error('Email campaign error:', error)
+    res.status(500).json({ error: 'Failed to send campaign' })
+  }
+})
+
+// ========================================
+// EMAIL WORKFLOW AUTOMATION API ENDPOINT
+// ========================================
+
+app.post('/api/email/workflow-automation', async (req, res) => {
+  try {
+    const { user_id } = req.body
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'Missing user_id' })
+    }
+
+    // Get active review request workflows
+    const { data: workflows, error: workflowsError } = await supabase
+      .from('email_workflows')
+      .select('*')
+      .eq('user_id', user_id)
+      .eq('is_active', true)
+      .eq('campaign_type', 'review_request')
+
+    if (workflowsError) {
+      return res.status(500).json({ error: 'Failed to fetch workflows' })
+    }
+
+    if (!workflows || workflows.length === 0) {
+      return res.status(200).json({ 
+        success: true, 
+        message: 'No active review request workflows found',
+        processed: 0
+      })
+    }
+
+    let totalProcessed = 0
+
+    for (const workflow of workflows) {
+      // Calculate the cutoff time for completed leads
+      const cutoffTime = new Date()
+      cutoffTime.setHours(cutoffTime.getHours() - workflow.delay_hours)
+
+      // Get completed leads that haven't received a review request yet
+      const { data: completedLeads, error: leadsError } = await supabase
+        .from('leads')
+        .select('id, name, email, source, updated_at')
+        .eq('user_id', user_id)
+        .eq('status', 'completed')
+        .not('email', 'is', null)
+        .lte('updated_at', cutoffTime.toISOString())
+
+      if (leadsError) {
+        console.error('Error fetching completed leads:', leadsError)
+        continue
+      }
+
+      if (!completedLeads || completedLeads.length === 0) {
+        continue
+      }
+
+      // Check which leads already received review requests
+      const leadIds = completedLeads.map(lead => lead.id)
+      const { data: existingEmails, error: emailsError } = await supabase
+        .from('email_logs')
+        .select('lead_id')
+        .eq('user_id', user_id)
+        .eq('campaign_type', 'review_request')
+        .in('lead_id', leadIds)
+
+      if (emailsError) {
+        console.error('Error checking existing emails:', emailsError)
+        continue
+      }
+
+      const existingLeadIds = new Set(existingEmails?.map(email => email.lead_id) || [])
+      const leadsToEmail = completedLeads.filter(lead => !existingLeadIds.has(lead.id))
+
+      if (leadsToEmail.length === 0) {
+        continue
+      }
+
+      // Get business info from Profile page for personalization
+      const { data: businessInfo } = await supabase
+        .from('user_settings')
+        .select('business_name, business_website, business_hours, booking_link')
+        .eq('user_id', user_id)
+        .single()
+
+      // Generate and send review request emails
+      const emailLogs = leadsToEmail.map(lead => {
+        const subject = `How was your experience? We'd love to hear about it!`
+        const content = generateReviewRequestContent(lead, businessInfo)
+
+        return {
+          user_id,
+          lead_id: lead.id,
+          recipient_email: lead.email,
+          recipient_name: lead.name,
+          subject,
+          content,
+          campaign_type: 'review_request',
+          status: 'sent'
+        }
+      })
+
+      // Insert email logs
+      const { error: insertError } = await supabase
+        .from('email_logs')
+        .insert(emailLogs)
+
+      if (insertError) {
+        console.error('Error inserting email logs:', insertError)
+        continue
+      }
+
+      totalProcessed += leadsToEmail.length
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: `Processed ${totalProcessed} review request emails`,
+      processed: totalProcessed
+    })
+  } catch (error) {
+    console.error('Workflow automation error:', error)
+    res.status(500).json({ error: 'Failed to process workflow automation' })
+  }
+})
+
+function generateReviewRequestContent(lead, businessInfo) {
+  const businessName = businessInfo?.business_name || 'Our Business'
+  const website = businessInfo?.business_website || businessInfo?.booking_link || 'our website'
+  const businessHours = businessInfo?.business_hours || ''
+  
+  return `<h2>Hi ${lead.name}!</h2>
+  <p>We hope you're loving your experience with us!</p>
+  <p>Your feedback means everything to us and helps other clients discover our services.</p>
+  <p><a href="${website}" style="background: #ff6b6b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Leave a Review</a></p>
+  <p>Ready to book your next appointment? <a href="${website}">Click here</a></p>
+  ${businessHours ? `<p><strong>Our Hours:</strong> ${businessHours}</p>` : ''}
+  <p>Best regards,<br>${businessName} Team</p>`
+}
+
+// ========================================
+// AI GENERATION API ENDPOINT
+// ========================================
+
+app.post('/api/ai/generate', async (req, res) => {
+  try {
+    const { prompt, user_id } = req.body
+
+    if (!prompt || !user_id) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    // Try to use Ollama first, fallback to template-based approach
+    try {
+      const ollamaResponse = await generateWithOllama(prompt)
+      if (ollamaResponse) {
+        return res.status(200).json(ollamaResponse)
+      }
+    } catch (error) {
+      console.log('Ollama not available, using fallback:', error)
+    }
+    
+    // Fallback to template-based approach
+    const response = generateEmailContent(prompt)
+    res.status(200).json(response)
+  } catch (error) {
+    console.error('AI generation error:', error)
+    res.status(500).json({ error: 'Failed to generate content' })
+  }
+})
+
+async function generateWithOllama(prompt) {
+  try {
+    const response = await fetch('http://127.0.0.1:11434/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama3:latest', // Using the available model
+        prompt: `${prompt}\n\nPlease respond with valid JSON in this format: {"subject": "Email Subject", "content": "HTML email content"}`,
+        stream: false
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    
+    // Try to parse the JSON response
+    try {
+      const parsedResponse = JSON.parse(data.response)
+      return {
+        subject: parsedResponse.subject || 'Email from Your Business',
+        content: parsedResponse.content || '<h2>Hello!</h2><p>Thank you for your interest!</p>'
+      }
+    } catch (parseError) {
+      // If JSON parsing fails, extract subject and content from the response
+      const responseText = data.response
+      const subjectMatch = responseText.match(/"subject":\s*"([^"]+)"/)
+      const contentMatch = responseText.match(/"content":\s*"([^"]+)"/)
+      
+      return {
+        subject: subjectMatch ? subjectMatch[1] : 'Email from Your Business',
+        content: contentMatch ? contentMatch[1] : '<h2>Hello!</h2><p>Thank you for your interest!</p>'
+      }
+    }
+  } catch (error) {
+    console.error('Ollama generation error:', error)
+    return null
+  }
+}
+
+function generateEmailContent(prompt) {
+  // Extract campaign type and business info from prompt
+  const campaignType = extractCampaignType(prompt)
+  const businessName = extractBusinessInfo(prompt, 'Business Name:')
+  const website = extractBusinessInfo(prompt, 'Business URL:')
+  
+  // Generate content based on campaign type - be more specific about each type
+  switch (campaignType) {
+         case 'promotion':
+           return {
+             subject: `🎉 Special Promotion from ${businessName}!`,
+             content: `Hello!
+
+We're excited to share an exclusive promotion with you!
+
+Visit our website to learn more about this limited-time offer: ${website}
+
+Don't miss out on this amazing opportunity!
+
+Best regards,
+${businessName} Team`
+           }
+    
+         case 'offer':
+           return {
+             subject: `🎁 Special Offer Just for You - ${businessName}`,
+             content: `Hello!
+
+We have an exclusive offer that we think you'll absolutely love!
+
+This special deal is available for a limited time only and is designed specifically for our valued customers like you.
+
+Here's what we're offering:
+• Special pricing on select services
+• Exclusive access to new features
+• Limited-time bonus benefits
+
+This offer won't last long, so don't miss out!
+
+Visit our website to claim your special offer: ${website}
+
+Thank you for being a valued customer!
+
+Best regards,
+${businessName} Team`
+           }
+    
+         case 'update':
+           return {
+             subject: `📢 Important Update from ${businessName}`,
+             content: `Hello!
+
+We wanted to share some important updates with you about ${businessName}.
+
+Here are the latest developments and news from our business:
+
+• We're excited to announce some changes to our services
+• We've been working hard to improve our customer experience
+• We have some exciting news to share about our future plans
+
+We appreciate your continued support and trust in our business.
+
+For more information, visit our website: ${website}
+
+Thank you for being a valued customer!
+
+Best regards,
+${businessName} Team`
+           }
+    
+         case 'custom':
+           // Check if there's custom input in the prompt
+           const customRequestMatch = prompt.match(/CUSTOM REQUEST:\s*([^]+?)(?=\n\n|$)/i)
+           const customRequest = customRequestMatch ? customRequestMatch[1].trim() : null
+           
+           if (customRequest) {
+             return {
+               subject: `Message from ${businessName}`,
+               content: `Hello!
+
+${customRequest}
+
+We appreciate your continued support and trust in our business.
+
+For more information, visit our website: ${website}
+
+If you have any questions, please don't hesitate to contact us.
+
+Best regards,
+${businessName} Team`
+             }
+           } else {
+             return {
+               subject: `Message from ${businessName}`,
+               content: `Hello!
+
+We hope this message finds you well.
+
+We wanted to reach out and share some information with you.
+
+Visit our website to learn more: ${website}
+
+If you have any questions, please don't hesitate to contact us.
+
+Best regards,
+${businessName} Team`
+             }
+           }
+    
+         default:
+           return {
+             subject: `Message from ${businessName}`,
+             content: `Hello!
+
+We hope this message finds you well.
+
+Visit us at ${website} to learn more about our services.
+
+Best regards,
+${businessName} Team`
+           }
+  }
+}
+
+function extractCampaignType(prompt) {
+  const lowerPrompt = prompt.toLowerCase()
+  
+  // Look for specific campaign type mentions (prioritize exact matches)
+  if (lowerPrompt.includes('campaign type: promotion')) return 'promotion'
+  if (lowerPrompt.includes('campaign type: offer')) return 'offer'
+  if (lowerPrompt.includes('campaign type: update')) return 'update'
+  if (lowerPrompt.includes('campaign type: custom')) return 'custom'
+  
+  // Fallback to general mentions
+  if (lowerPrompt.includes('promotion')) return 'promotion'
+  if (lowerPrompt.includes('offer')) return 'offer'
+  if (lowerPrompt.includes('update')) return 'update'
+  if (lowerPrompt.includes('custom')) return 'custom'
+  
+  // Default fallback
+  return 'custom'
+}
+
+function extractBusinessInfo(prompt, field) {
+  const regex = new RegExp(`${field}\\s*([^\\n]+)`, 'i')
+  const match = prompt.match(regex)
+  return match ? match[1].trim() : 'Your Business'
+}
+
 app.listen(PORT, async () => {
   console.log(`🚀 Development API server running on http://localhost:${PORT}`)
   console.log(`📱 Frontend should be running on http://localhost:5173`)

@@ -25,6 +25,13 @@ interface CalendarEvent {
   htmlLink?: string
 }
 
+interface CalendarDay {
+  date: Date
+  isCurrentMonth: boolean
+  isToday: boolean
+  isSelected: boolean
+}
+
 interface BusinessCalendarViewProps {
   onError?: (error: string) => void
   events?: CalendarEvent[]
@@ -460,7 +467,7 @@ function MonthView({
   const startingDayOfWeek = firstDay.getDay()
 
   // Generate calendar days
-  const calendarDays = []
+  const calendarDays: CalendarDay[] = []
   
   // Previous month days
   const prevMonth = new Date(year, month - 1, 0)

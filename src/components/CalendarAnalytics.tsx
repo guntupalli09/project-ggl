@@ -163,7 +163,7 @@ export default function CalendarAnalytics({ events }: CalendarAnalyticsProps) {
     })
 
     // Monthly trend (last 6 months)
-    const monthlyTrend = []
+    const monthlyTrend: Array<{ month: string; count: number }> = []
     for (let i = 5; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const monthName = date.toLocaleDateString('en-US', { month: 'short' })
