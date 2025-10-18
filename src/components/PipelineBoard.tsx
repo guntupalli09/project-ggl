@@ -84,12 +84,10 @@ export default function PipelineBoard({ contacts, leads, prefix = '' }: Pipeline
   // Group leads by status
   useEffect(() => {
     if (!data) {
-      console.log('PipelineBoard: data is undefined')
       setLeadsByStatus({})
       return
     }
     
-    console.log('PipelineBoard: data changed', data.length)
     const grouped = data.reduce((acc, lead) => {
       // Map Contact status to Lead status
       let mappedStatus = lead.status || 'new'
@@ -112,15 +110,22 @@ export default function PipelineBoard({ contacts, leads, prefix = '' }: Pipeline
       }
     })
 
-    console.log('PipelineBoard: grouped leads', grouped)
     setLeadsByStatus(grouped)
   }, [data])
 
   // Don't render if no data
   if (!data || data.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-500 dark:text-gray-400">No leads to display</p>
+      <div className="text-center py-12">
+        <div className="text-gray-400 dark:text-gray-500 mb-4">
+          <ClockIcon className="h-12 w-12 mx-auto" />
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          No leads in pipeline
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400">
+          Add some leads to see them in your pipeline
+        </p>
       </div>
     )
   }
@@ -134,7 +139,7 @@ export default function PipelineBoard({ contacts, leads, prefix = '' }: Pipeline
   }
 
   return (
-    <div className="p-6">
+    <div className="w-full">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
           Lead Pipeline
@@ -144,23 +149,21 @@ export default function PipelineBoard({ contacts, leads, prefix = '' }: Pipeline
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {columns.map((column) => {
             const columnLeads = leadsByStatus[column.status] || []
             const IconComponent = column.icon
 
-            console.log(`Rendering column: ${column.id} with ${columnLeads.length} leads`)
-
             return (
               <div key={column.id} className="flex flex-col" data-column-id={column.id}>
                 {/* Column Header */}
-                <div className={`${column.color} rounded-lg p-4 mb-4 border-2`}>
+                <div className={`${column.color} rounded-lg p-3 mb-3 border-2`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <IconComponent className="h-5 w-5" />
-                      <h3 className="font-semibold">{column.title}</h3>
+                      <IconComponent className="h-4 w-4" />
+                      <h3 className="font-semibold text-sm">{column.title}</h3>
                     </div>
-                    <span className="bg-white dark:bg-gray-800 px-2 py-1 rounded-full text-sm font-medium">
+                    <span className="bg-white dark:bg-gray-800 px-2 py-1 rounded-full text-xs font-medium">
                       {columnLeads.length}
                     </span>
                   </div>
@@ -169,13 +172,11 @@ export default function PipelineBoard({ contacts, leads, prefix = '' }: Pipeline
                 {/* Droppable Area */}
                 <Droppable droppableId={`${prefix}${column.id}`} key={`droppable-${prefix}${column.id}`}>
                   {(provided, snapshot) => {
-                    const droppableId = `${prefix}${column.id}`
-                    console.log(`🎯 Droppable ${droppableId} rendered, isDraggingOver: ${snapshot.isDraggingOver}`)
                     return (
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`min-h-[400px] p-2 rounded-lg border-2 border-dashed transition-colors ${
+                      className={`min-h-[300px] p-2 rounded-lg border-2 border-dashed transition-colors ${
                         snapshot.isDraggingOver
                           ? 'border-indigo-300 bg-indigo-50 dark:border-indigo-600 dark:bg-indigo-900/20'
                           : 'border-gray-200 dark:border-gray-700'

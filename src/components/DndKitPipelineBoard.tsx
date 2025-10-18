@@ -49,11 +49,19 @@ interface DndKitPipelineBoardProps {
   prefix?: string
 }
 
-const columns = [
+// Define columns for both leads and contacts
+const leadColumns = [
   { id: 'new', title: 'New', color: 'bg-blue-100 dark:bg-blue-900', icon: () => <div className="w-3 h-3 bg-blue-500 rounded-full" /> },
   { id: 'contacted', title: 'Contacted', color: 'bg-yellow-100 dark:bg-yellow-900', icon: () => <div className="w-3 h-3 bg-yellow-500 rounded-full" /> },
   { id: 'booked', title: 'Booked', color: 'bg-green-100 dark:bg-green-900', icon: () => <div className="w-3 h-3 bg-green-500 rounded-full" /> },
   { id: 'completed', title: 'Completed', color: 'bg-purple-100 dark:bg-purple-900', icon: () => <div className="w-3 h-3 bg-purple-500 rounded-full" /> },
+]
+
+const contactColumns = [
+  { id: 'Prospect', title: 'Prospect', color: 'bg-blue-100 dark:bg-blue-900', icon: () => <div className="w-3 h-3 bg-blue-500 rounded-full" /> },
+  { id: 'Contacted', title: 'Contacted', color: 'bg-yellow-100 dark:bg-yellow-900', icon: () => <div className="w-3 h-3 bg-yellow-500 rounded-full" /> },
+  { id: 'In Progress', title: 'In Progress', color: 'bg-green-100 dark:bg-green-900', icon: () => <div className="w-3 h-3 bg-green-500 rounded-full" /> },
+  { id: 'Closed', title: 'Closed', color: 'bg-purple-100 dark:bg-purple-900', icon: () => <div className="w-3 h-3 bg-purple-500 rounded-full" /> },
 ]
 
 function DroppableColumn({ 
@@ -201,6 +209,9 @@ export default function DndKitPipelineBoard({
 
   // Use either contacts or leads, prioritizing contacts
   const data = contacts || leads
+  
+  // Determine which columns to use based on data type
+  const columns = contacts ? contactColumns : leadColumns
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -212,12 +223,9 @@ export default function DndKitPipelineBoard({
   // Group leads by status
   useEffect(() => {
     if (!data) {
-      console.log('DndKitPipelineBoard: data is undefined')
       setLeadsByStatus({})
       return
     }
-    
-    console.log('DndKitPipelineBoard: data changed', data.length)
     
     const grouped = data.reduce((acc, lead) => {
       const status = lead.status
@@ -228,23 +236,18 @@ export default function DndKitPipelineBoard({
       return acc
     }, {} as Record<string, ContactOrLead[]>)
     
-    console.log('DndKitPipelineBoard: grouped leads', grouped)
     setLeadsByStatus(grouped)
   }, [data])
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string)
-    console.log('🚀 Drag Start:', event.active.id)
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveId(null)
 
-    console.log('🎯 Drag End:', { active: active.id, over: over?.id })
-
     if (!over) {
-      console.log('❌ No destination, drag cancelled')
       return
     }
 
@@ -254,22 +257,34 @@ export default function DndKitPipelineBoard({
     // Find the item being moved
     const activeItem = data?.find(item => item.id === activeId)
     if (!activeItem) {
-      console.log('❌ Active item not found:', activeId)
       return
     }
 
-    // The overId should now be the column ID (new, contacted, booked, completed)
-    const newStatus = overId
+    // Determine the target column - if overId is a lead ID, find which column it belongs to
+    let newStatus = overId
+    
+    // Check if overId is a lead ID (not a column ID)
+    const isOverLead = data?.find(item => item.id === overId)
+    if (isOverLead) {
+      // If we're dragging over a lead, use that lead's status
+      newStatus = isOverLead.status
+    } else {
+      // If overId is a column ID, validate it's a valid status
+      const validLeadStatuses = ['new', 'contacted', 'booked', 'completed']
+      const validContactStatuses = ['Prospect', 'Contacted', 'In Progress', 'Closed']
+      const validStatuses = contacts ? validContactStatuses : validLeadStatuses
+      
+      if (!validStatuses.includes(overId)) {
+        return
+      }
+    }
 
     // Check if we're moving to a different column
     const currentStatus = activeItem.status
 
     if (currentStatus === newStatus) {
-      console.log('❌ Same status, no change needed')
       return
     }
-
-    console.log('📝 Updating status:', { activeId, from: currentStatus, to: newStatus })
 
     // Update the item status
     if (onUpdateLead && 'source' in activeItem) {
@@ -282,8 +297,6 @@ export default function DndKitPipelineBoard({
       // Fallback to general update
       await onContactUpdate()
     }
-
-    console.log('✅ Status updated successfully')
   }
 
   // Don't render if no data
@@ -296,15 +309,7 @@ export default function DndKitPipelineBoard({
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Lead Pipeline
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          Drag and drop leads between stages to update their status
-        </p>
-      </div>
+    <div className="w-full">
 
       <DndContext
         sensors={sensors}
@@ -315,7 +320,6 @@ export default function DndKitPipelineBoard({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {columns.map((column) => {
             const columnLeads = leadsByStatus[column.id] || []
-            console.log(`Rendering column: ${column.id} with ${columnLeads.length} leads`)
 
             return (
               <DroppableColumn

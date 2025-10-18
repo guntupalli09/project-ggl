@@ -215,9 +215,6 @@ export default function CalendarAnalytics({ events }: CalendarAnalyticsProps) {
   if (loading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          Calendar Analytics
-        </h3>
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
         </div>
@@ -228,9 +225,6 @@ export default function CalendarAnalytics({ events }: CalendarAnalyticsProps) {
   if (!events || events.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          Calendar Analytics
-        </h3>
         <div className="text-center py-12">
           <div className="text-gray-400 text-6xl mb-4">📊</div>
           <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
@@ -246,9 +240,6 @@ export default function CalendarAnalytics({ events }: CalendarAnalyticsProps) {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-        Calendar Analytics
-      </h3>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

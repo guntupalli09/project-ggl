@@ -340,14 +340,10 @@ export default function Calendar() {
 
           {activeTab === 'bookings' && (
             <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="mb-6">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                   Booking Management
                 </h2>
-                <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  <PlusIcon className="h-4 w-4 mr-2" />
-                  New Booking
-                </button>
               </div>
               <BookingSystem onBookingSaved={handleBookingSaved} />
             </div>
@@ -363,14 +359,10 @@ export default function Calendar() {
                 />
               ) : (
                 <>
-                  <div className="flex items-center justify-between mb-6">
+                  <div className="mb-6">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                       Calendar Automation
                     </h2>
-                    <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                      <PlusIcon className="h-4 w-4 mr-2" />
-                      New Automation
-                    </button>
                   </div>
                   <CalendarAutomation />
                 </>

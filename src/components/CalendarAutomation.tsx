@@ -161,10 +161,7 @@ export default function CalendarAutomation({ onEventCreated }: CalendarAutomatio
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Calendar Automation
-        </h3>
+      <div className="flex items-center justify-end mb-6">
         <button
           onClick={() => {/* TODO: Implement create modal */}}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

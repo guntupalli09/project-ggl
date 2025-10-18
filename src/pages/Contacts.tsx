@@ -493,12 +493,23 @@ export default function Contacts() {
                   </div>
                 </div>
               ) : (
-                <DndKitCombinedPipelineBoard 
-                  leads={leads} 
-                  contacts={[]} 
-                  onUpdateLead={updateLead} 
-                  onUpdateContact={() => {}}
-                />
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      Lead Pipeline
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      Drag and drop leads between stages to update their status
+                    </p>
+                  </div>
+                  <DndKitCombinedPipelineBoard 
+                    leads={leads} 
+                    contacts={[]} 
+                    onUpdateLead={updateLead} 
+                    onUpdateContact={() => {}}
+                    showContactsPipeline={false}
+                  />
+                </div>
               )}
 
               {/* AI Message Generator */}
@@ -614,16 +625,42 @@ export default function Contacts() {
                   )}
                 </div>
               ) : (
-                <DndKitCombinedPipelineBoard 
-                  leads={[]} 
-                  contacts={contacts} 
-                  onUpdateLead={async () => {}}
-                  onUpdateContact={(id, updates) => {
-                    setContacts(contacts.map(contact => 
-                      contact.id === id ? { ...contact, ...updates } : contact
-                    ))
-                  }}
-                />
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      Contacts Pipeline
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      Drag and drop contacts between stages to update their status
+                    </p>
+                  </div>
+                  <DndKitCombinedPipelineBoard 
+                    leads={[]} 
+                    contacts={contacts} 
+                    onUpdateLead={async () => {}}
+                    onUpdateContact={async (id, updates) => {
+                      try {
+                        const { error } = await supabase
+                          .from('contacts')
+                          .update({
+                            ...updates,
+                            updated_at: new Date().toISOString()
+                          })
+                          .eq('id', id)
+
+                        if (error) throw error
+
+                        setContacts(contacts.map(contact => 
+                          contact.id === id ? { ...contact, ...updates, updated_at: new Date().toISOString() } : contact
+                        ))
+                      } catch (error) {
+                        console.error('Error updating contact:', error)
+                        setError('Failed to update contact')
+                      }
+                    }}
+                    showLeadsPipeline={false}
+                  />
+                </div>
               )}
 
               {/* AI Sequence Generator */}
@@ -640,17 +677,72 @@ export default function Contacts() {
                 </div>
               </div>
 
-              {/* Combined Pipeline View */}
-              <DndKitCombinedPipelineBoard 
-                leads={leads} 
-                contacts={contacts} 
-                onUpdateLead={updateLead} 
-                onUpdateContact={(id, updates) => {
-                  setContacts(contacts.map(contact => 
-                    contact.id === id ? { ...contact, ...updates } : contact
-                  ))
-                }} 
-              />
+              {/* Combined Pipeline View - Show both leads and contacts in one unified pipeline */}
+              <div className="space-y-6">
+                {/* Leads Pipeline */}
+                {leads.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Leads Pipeline</h3>
+                    <DndKitCombinedPipelineBoard 
+                      leads={leads} 
+                      contacts={[]} 
+                      onUpdateLead={updateLead} 
+                      onUpdateContact={() => {}}
+                      showContactsPipeline={false}
+                    />
+                  </div>
+                )}
+
+                {/* Contacts Pipeline */}
+                {contacts.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Contacts Pipeline</h3>
+                    <DndKitCombinedPipelineBoard 
+                      leads={[]} 
+                      contacts={contacts} 
+                      onUpdateLead={async () => {}}
+                      onUpdateContact={async (id, updates) => {
+                        try {
+                          const { error } = await supabase
+                            .from('contacts')
+                            .update({
+                              ...updates,
+                              updated_at: new Date().toISOString()
+                            })
+                            .eq('id', id)
+
+                          if (error) throw error
+
+                          setContacts(contacts.map(contact => 
+                            contact.id === id ? { ...contact, ...updates, updated_at: new Date().toISOString() } : contact
+                          ))
+                        } catch (error) {
+                          console.error('Error updating contact:', error)
+                          setError('Failed to update contact')
+                        }
+                      }}
+                      showLeadsPipeline={false}
+                    />
+                  </div>
+                )}
+
+                {/* Show message if no data */}
+                {leads.length === 0 && contacts.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 dark:text-gray-500 mb-4">
+                      <svg className="h-12 w-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      No pipeline data
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      Add some leads or contacts to see them in your pipeline
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

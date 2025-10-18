@@ -259,10 +259,7 @@ export default function BookingSystem({ onBookingCreated, onBookingSaved }: Book
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Booking System
-          </h3>
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowBookingForm(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

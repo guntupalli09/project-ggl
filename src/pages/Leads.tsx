@@ -293,21 +293,15 @@ const Leads: React.FC = () => {
               </table>
             </div>
           ) : (
-            leads && leads.length > 0 ? (
-              <PipelineBoard 
-                contacts={leads} 
-                onContactUpdate={async () => {
-                  // Refresh leads data
-                  window.location.reload()
-                }} 
-                onEditContact={handleEdit} 
-                onDeleteContact={handleDelete} 
-              />
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500 dark:text-gray-400">No leads to display</p>
-              </div>
-            )
+            <PipelineBoard 
+              contacts={leads} 
+              onContactUpdate={async () => {
+                // Refresh leads data
+                window.location.reload()
+              }} 
+              onEditContact={handleEdit} 
+              onDeleteContact={handleDelete} 
+            />
           )}
           </CardContent>
         </Card>
