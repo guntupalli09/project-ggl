@@ -287,27 +287,9 @@ export default function Login() {
             </Card>
           </div>
 
-          {/* Trust Indicators */}
+          {/* Feature Highlights */}
           <div className={`text-center space-y-6 transition-all duration-1000 delay-500 ${isAnimating ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-            <div className="flex items-center justify-center space-x-8 text-sm text-gray-500 dark:text-gray-400">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="font-medium">99.9% Uptime</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span className="font-medium">SOC 2 Compliant</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                <span className="font-medium">24/7 Support</span>
-              </div>
-            </div>
-            
             <div className="text-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Trusted by 10,000+ businesses worldwide
-              </p>
               <div className="flex items-center justify-center space-x-4 text-xs text-gray-400 dark:text-gray-500">
                 <div className="flex items-center space-x-1">
                   <CheckCircleIcon className="w-3 h-3 text-green-500" />
