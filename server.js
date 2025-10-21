@@ -4354,6 +4354,236 @@ app.post('/api/tenant/onboarding', async (req, res) => {
   }
 })
 
+// Test endpoint for missed call simulation (for testing without Google Business Profile)
+app.post('/api/test/missed-call', async (req, res) => {
+  try {
+    const { user_id, phone_number, caller_name } = req.body
+
+    if (!user_id || !phone_number) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: user_id, phone_number' 
+      })
+    }
+
+    // Create a test call log entry (simulate without actual table for now)
+    const callLog = {
+      id: 'test-call-' + Date.now(),
+      user_id: user_id,
+      phone: phone_number,
+      caller_name: caller_name || 'Test Caller',
+      call_type: 'MISSED',
+      duration: 0,
+      timestamp: new Date().toISOString(),
+      source: 'test_simulation'
+    }
+
+    // Create a test lead
+    const { data: lead, error: leadError } = await supabase
+      .from('leads')
+      .insert({
+        name: caller_name || 'Test Caller',
+        phone: phone_number,
+        source: 'missed_call',
+        status: 'new',
+        workflow_stage: 'callback_asap',
+        user_id: user_id
+      })
+      .select()
+      .single()
+
+    if (leadError) {
+      console.error('Failed to create test lead:', leadError)
+    } else {
+      // Update call log with lead ID (simulate)
+      callLog.lead_id = lead.id
+    }
+
+    // Generate AI follow-up message
+    const { data: userSettings } = await supabase
+      .from('user_settings')
+      .select('business_name, business_hours, booking_link, business_website')
+      .eq('user_id', user_id)
+      .single()
+
+    const aiMessage = await generateMissedCallMessage({
+      businessName: userSettings?.business_name || 'our business',
+      bookingLink: userSettings?.booking_link || 'our booking system',
+      businessHours: userSettings?.business_hours || 'our business hours',
+      businessUrl: userSettings?.business_website || 'our website',
+      callerNumber: phone_number
+    })
+
+    res.status(200).json({
+      success: true,
+      message: 'Test missed call created successfully',
+      call_log: callLog,
+      lead: lead,
+      ai_message: aiMessage,
+      note: 'This is a test simulation. In production, this would be triggered by actual Google Business Profile calls.'
+    })
+
+  } catch (error) {
+    console.error('Test missed call error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Google Calendar API endpoints (missing from frontend)
+app.get('/api/google/auth', async (req, res) => {
+  try {
+    const { user_id } = req.query
+    
+    if (!user_id) {
+      return res.status(400).json({ error: 'User ID is required' })
+    }
+
+    // Get user's Google Calendar settings
+    const { data: userSettings } = await supabase
+      .from('user_settings')
+      .select('google_calendar_token, google_calendar_refresh_token, google_calendar_token_expiry')
+      .eq('user_id', user_id)
+      .single()
+
+    if (!userSettings?.google_calendar_token) {
+      return res.status(404).json({ 
+        error: 'Google Calendar not connected',
+        connected: false 
+      })
+    }
+
+    // Check if token is expired
+    const now = new Date()
+    const expiry = new Date(userSettings.google_calendar_token_expiry)
+    
+    if (now >= expiry) {
+      return res.status(401).json({ 
+        error: 'Google Calendar token expired',
+        connected: false,
+        needsRefresh: true
+      })
+    }
+
+    res.json({
+      connected: true,
+      hasToken: true,
+      tokenExpiry: userSettings.google_calendar_token_expiry
+    })
+
+  } catch (error) {
+    console.error('Google Calendar auth check error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+app.post('/api/google/tokens', async (req, res) => {
+  try {
+    const { user_id, refresh_token, code, action } = req.body
+    
+    // Handle token exchange (OAuth callback)
+    if (action === 'exchange' && code) {
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          code: code,
+          grant_type: 'authorization_code',
+          redirect_uri: process.env.NODE_ENV === 'production' 
+            ? 'https://www.getgetleads.com/api/google/callback'
+            : 'http://localhost:5173/profile'
+        })
+      })
+
+      if (!tokenResponse.ok) {
+        const errorData = await tokenResponse.json()
+        console.error('Token exchange error:', errorData)
+        return res.status(400).json({ 
+          error: 'Failed to exchange token',
+          details: errorData
+        })
+      }
+
+      const tokenData = await tokenResponse.json()
+      const expiryTime = new Date(Date.now() + tokenData.expires_in * 1000)
+
+      res.json({
+        success: true,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_in: tokenData.expires_in,
+        expiry_time: expiryTime.toISOString()
+      })
+      return
+    }
+    
+    // Handle token refresh
+    if (!refresh_token) {
+      return res.status(400).json({ error: 'Refresh token is required for refresh' })
+    }
+
+    // For token refresh, we don't need to update the database immediately
+    // Just return the new token and let the frontend handle the update
+
+    // Debug: Log the token refresh attempt
+    console.log('Attempting Google token refresh:', {
+      hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+      hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+      refreshTokenLength: refresh_token?.length || 0,
+      refreshTokenStart: refresh_token?.substring(0, 10) + '...'
+    })
+
+    // Refresh the Google Calendar token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        refresh_token: refresh_token,
+        grant_type: 'refresh_token'
+      })
+    })
+
+    // Debug: Log the response
+    console.log('Google token refresh response:', {
+      status: tokenResponse.status,
+      statusText: tokenResponse.statusText,
+      ok: tokenResponse.ok
+    })
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json()
+      console.error('Token refresh error:', errorData)
+      return res.status(400).json({ 
+        error: 'Failed to refresh token',
+        details: errorData
+      })
+    }
+
+    const tokenData = await tokenResponse.json()
+    const expiryTime = new Date(Date.now() + tokenData.expires_in * 1000)
+
+    // Return the new token data for the frontend to handle
+    res.json({
+      success: true,
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token || refresh_token, // Keep existing refresh token if not provided
+      expires_in: tokenData.expires_in,
+      token_type: tokenData.token_type,
+      expiry_time: expiryTime.toISOString()
+    })
+
+  } catch (error) {
+    console.error('Token refresh error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 app.listen(PORT, async () => {
   console.log(`🚀 Development API server running on http://localhost:${PORT}`)
   console.log(`📱 Frontend should be running on http://localhost:5173`)

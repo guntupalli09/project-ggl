@@ -140,7 +140,7 @@ const GoogleCalendarIntegration: React.FC<GoogleCalendarIntegrationProps> = ({
           return
         }
 
-        const authUrl = `${window.location.origin}/api/google/auth`
+        const authUrl = `${window.location.origin}/api/google/auth?user_id=${user.id}`
         const response = await fetch(authUrl, {
           method: 'GET',
           headers: {

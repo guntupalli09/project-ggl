@@ -25,6 +25,8 @@ import Onboarding from './pages/Onboarding'
 import NicheDemo from './pages/NicheDemo'
 import AuthDebug from './pages/AuthDebug'
 import Settings from './pages/Settings'
+import TestMissedCall from './pages/TestMissedCall'
+import TestCompleteFlow from './pages/TestCompleteFlow'
 import AppStatus from './components/AppStatus'
 import ErrorBoundary from './components/ErrorBoundary'
 // Workflow engine is only used on server-side
@@ -76,6 +78,8 @@ function App() {
                   <Route path="/reviews" element={<Reviews />} />
                   <Route path="/brand-voice" element={<BrandVoice />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/test-missed-call" element={<TestMissedCall />} />
+                  <Route path="/test-complete-flow" element={<TestCompleteFlow />} />
                 </Routes>
               </ResponsiveLayout>
             </ProtectedRoute>

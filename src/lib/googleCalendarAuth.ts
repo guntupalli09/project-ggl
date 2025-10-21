@@ -286,40 +286,18 @@ export class GoogleCalendarAuth {
       
       let response
       
-      if (environment.isProduction) {
-        // Use backend API in production
-        console.log('Using backend API for token refresh in production')
-        response = await fetch('/api/google/tokens', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            refresh_token: refreshToken,
-            action: 'refresh'
-          })
+      // Always use backend API for token refresh (both development and production)
+      console.log('Using backend API for token refresh')
+      response = await fetch('http://localhost:3001/api/google/tokens', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken,
+          action: 'refresh'
         })
-      } else {
-        // Direct token refresh in development
-        if (!environment.googleClientSecret) {
-          console.error('VITE_GOOGLE_CLIENT_SECRET not found for token refresh')
-          return false
-        }
-        
-        console.log('Using direct token refresh for development')
-        response = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            client_id: this.config.clientId,
-            client_secret: environment.googleClientSecret,
-            refresh_token: refreshToken,
-            grant_type: 'refresh_token'
-          })
-        })
-      }
+      })
 
       if (!response.ok) {
         console.error('Token refresh failed:', response.status, response.statusText)
