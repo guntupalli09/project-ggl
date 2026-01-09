@@ -1,0 +1,81 @@
+EXHIBIT B
+TECHNICAL EXPERT OPINION LETTER (TEMPLATE)
+
+IMPORTANT:
+This letter must be on the expert’s company or institutional letterhead, signed in ink or verified digital signature.
+
+[Expert’s Full Name]
+
+[Title]
+[Company / Institution Name]
+[Company Address]
+[Email] | [Phone]
+
+Date: [MM/DD/YYYY]
+
+Re: Expert Opinion in Support of O-1A Petition for Mr. Santhosh Guntupalli
+1. Expert Credentials (MANDATORY)
+
+I am writing this letter in my professional capacity as [Title] at [Company], where I am responsible for [brief description of responsibilities]. I have over [X] years of experience in [field: software engineering / operational systems / distributed systems / automation platforms], and I have [led teams / designed systems / evaluated architectures] used in [industry context].
+
+I am qualified to assess advanced operational decision systems and workflow automation architectures. I have no financial interest in Mr. Guntupalli’s work and provide this opinion independently.
+
+⚠️ This paragraph is critical.
+The expert must establish authority, not admiration.
+
+2. Scope of Review
+
+At the request of counsel, I reviewed Mr. Guntupalli’s Response-Aware Follow-Up Gating System (RAF-GS), including:
+
+The formal finite state model governing lead engagement
+
+The deterministic decision engine that evaluates outreach eligibility
+
+The audit-grade decision outputs produced by the system
+
+Architectural documentation and implementation artifacts
+
+My review focused on system design, decision methodology, and operational significance, not general code quality.
+
+3. Description of the Original Contribution (CORE PARAGRAPH)
+
+Mr. Guntupalli designed RAF-GS as a deterministic operational decision system that governs lead engagement workflows using a formal finite state machine rather than conventional timer-based automation.
+
+Unlike typical CRM systems that rely on static delays and ad-hoc rules, RAF-GS explicitly models lead engagement states (e.g., NEW, CONTACTED, ENGAGED, PAUSED, CLOSED) and enforces response-aware suppression, ensuring that outbound actions are automatically blocked when an inbound response occurs. All eligibility decisions are evaluated in a pure logic layer, independent of execution channels such as email or SMS, and produce explainable, auditable decision records.
+
+In my professional judgment, this represents a non-trivial architectural methodology that reduces redundant outreach, prevents state inconsistency, and introduces deterministic guarantees that are uncommon in small- and mid-scale operational automation platforms.
+
+✅ This is the paragraph USCIS actually cares about.
+
+4. Why This Is NOT Ordinary Engineering
+
+Many automation platforms implement follow-ups using simple time delays or conditional checks. RAF-GS differs materially in that:
+
+Decision logic is centralized, deterministic, and state-aware
+
+State transitions are explicitly constrained and persisted
+
+Follow-up eligibility is provably suppressed after inbound engagement
+
+Every decision produces an audit-grade explanation
+
+Designing such a system requires advanced judgment in operational decision modeling, not merely feature development. This approach reflects expertise typically seen in mission-critical workflow systems, rather than routine application automation.
+
+5. Significance and Industry Relevance
+
+Systems like RAF-GS address a well-recognized operational problem: lead-response latency and over-automation, which directly impacts customer experience and conversion outcomes. In my experience, few practitioners formalize this problem using deterministic state models with auditability.
+
+Mr. Guntupalli’s work demonstrates an ability to architect and evaluate operational decision systems, a skill set relied upon by organizations seeking to reduce automation risk and improve engagement discipline.
+
+6. Expert Conclusion
+
+Based on my review, it is my professional opinion that Mr. Santhosh Guntupalli has made original contributions of significance in the area of response-aware operational decision systems, and that his expertise places him well above that of an ordinary software engineer in this domain.
+
+I provide this opinion with a reasonable degree of professional certainty and am willing to clarify or expand upon this assessment if required.
+
+Sincerely,
+
+[Signature]
+[Expert’s Name]
+[Title]
+[Company / Institution]
