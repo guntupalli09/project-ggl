@@ -42,7 +42,8 @@ export const RAFGS_TRANSITIONS: Record<
 > = {
   [RAFGSState.NEW]: {
     [RAFGSEvent.LEAD_CREATED]: RAFGSState.NEW,
-    [RAFGSEvent.OUTBOUND_SENT]: RAFGSState.CONTACTED
+    [RAFGSEvent.OUTBOUND_SENT]: RAFGSState.CONTACTED,
+    [RAFGSEvent.TERMINATE]: RAFGSState.CLOSED
   },
 
   [RAFGSState.CONTACTED]: {
@@ -67,6 +68,7 @@ export const RAFGS_TRANSITIONS: Record<
     // Terminal state — no transitions allowed
   }
 };
+
 
 /**
  * Evaluate a state transition.
