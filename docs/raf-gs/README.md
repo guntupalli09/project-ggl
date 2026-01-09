@@ -19,32 +19,4 @@ All execution (email, SMS, scheduling) is external to the decision engine.
 
 ## Finite State Model
 
- ┌────────────┐
-                │    NEW     │
-                └─────┬──────┘
-                      │ LEAD_CREATED
-                      ▼
-                ┌────────────┐
-                │ CONTACTED  │◄─────────────┐
-                └─────┬──────┘              │
-                      │                     │
-        INBOUND_RECEIVED                    │ TIME_ELAPSED
-                      │                     │
-                      ▼                     │
-                ┌────────────┐              │
-                │  ENGAGED   │              │
-                └─────┬──────┘              │
-                      │                     │
-              MANUAL_OVERRIDE               │
-                      │                     │
-                      ▼                     │
-                ┌────────────┐              │
-                │   PAUSED   │              │
-                └─────┬──────┘              │
-                      │                     │
-                  TERMINATE                 │
-                      │                     │
-                      ▼                     │
-                ┌────────────┐              │
-                │   CLOSED   │──────────────┘
-                └────────────┘
+![RAF-GS FSM](RAF-GS_Finite_State_Model.png)
