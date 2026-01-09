@@ -16,3 +16,6 @@ All execution (email, SMS, scheduling) is external to the decision engine.
 - Explicit state persistence
 - Response-aware suppression
 - Explainable, auditable decisions
+
+## Finite State Model
+![RAF-GS FSM](RAF-GS_Finite_State_Model.png)
