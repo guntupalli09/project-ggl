@@ -18,4 +18,33 @@ All execution (email, SMS, scheduling) is external to the decision engine.
 - Explainable, auditable decisions
 
 ## Finite State Model
-![RAF-GS FSM](RAF-GS_Finite_State_Model.png)
+
+ ┌────────────┐
+                │    NEW     │
+                └─────┬──────┘
+                      │ LEAD_CREATED
+                      ▼
+                ┌────────────┐
+                │ CONTACTED  │◄─────────────┐
+                └─────┬──────┘              │
+                      │                     │
+        INBOUND_RECEIVED                    │ TIME_ELAPSED
+                      │                     │
+                      ▼                     │
+                ┌────────────┐              │
+                │  ENGAGED   │              │
+                └─────┬──────┘              │
+                      │                     │
+              MANUAL_OVERRIDE               │
+                      │                     │
+                      ▼                     │
+                ┌────────────┐              │
+                │   PAUSED   │              │
+                └─────┬──────┘              │
+                      │                     │
+                  TERMINATE                 │
+                      │                     │
+                      ▼                     │
+                ┌────────────┐              │
+                │   CLOSED   │──────────────┘
+                └────────────┘
