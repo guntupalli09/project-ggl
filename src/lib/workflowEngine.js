@@ -22,7 +22,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // IMPORTANT: update this on each RAF-GS logic change
 const RAFGS_ENGINE_VERSION = "1.0";
-const RAFGS_ENGINE_COMMIT = "5216a0d"; // e.g. "a9f3c2d"
+const RAFGS_ENGINE_COMMIT = "2c417e2"; // e.g. "a9f3c2d"
 
 // -------------------------------------------------------------------
 
