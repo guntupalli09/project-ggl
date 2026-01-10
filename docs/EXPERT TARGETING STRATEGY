@@ -1,0 +1,211 @@
+EXPERT TARGETING STRATEGY (O-1A, ENGINEERING)
+
+Your goal is NOT to find famous people.
+Your goal is to find credible, independent evaluators whose judgment USCIS trusts.
+
+You need 3 experts total, each serving a distinct legal purpose.
+
+THE 3 EXPERT ROLES (DO NOT MIX THEM)
+Expert 1 — SYSTEMS AUTHORITY (Core Letter)
+
+Purpose: Prove Original Contribution + Technical Significance
+
+Who this must be:
+
+Principal Engineer / Staff Engineer
+
+Systems Architect
+
+CTO / VP Engineering
+
+From:
+
+Mid-size SaaS (20–300 employees)
+
+SalesTech, MarTech, Workflow Automation, CRM, or Ops platforms
+
+Why this works:
+USCIS trusts people who design systems, not influencers.
+
+What they must credibly say:
+
+“I reviewed RAF-GS as a system and evaluated its architecture.”
+
+NOT:
+
+Your manager
+
+A friend
+
+Someone junior to you
+
+Someone who only “used the product”
+
+Expert 2 — OPERATIONAL RELIANCE AUTHORITY
+
+Purpose: Prove Critical Role / Judgment Relied Upon
+
+Who this must be:
+
+CTO
+
+Head of Engineering
+
+Founder (technical)
+
+From:
+
+A company that implemented or evaluated your logic
+
+Even a pilot or internal evaluation is fine
+
+What they must say:
+
+“We relied on his judgment to evaluate and structure our operational decision logic.”
+
+This letter is not about novelty.
+It’s about trust in your judgment.
+
+Expert 3 — FIELD CONTEXT AUTHORITY
+
+Purpose: Prove You are above ordinary engineers in this niche
+
+Who this can be:
+
+Senior engineer at a known company
+
+Open-source maintainer in workflow / automation
+
+Conference reviewer / technical advisor
+
+What they do:
+They contextualize your work:
+
+“Most systems do X. His system does Y, which is materially different.”
+
+This prevents USCIS from saying:
+
+“This is just normal engineering.”
+
+WHERE TO FIND THESE PEOPLE (REAL SOURCES)
+1️⃣ LinkedIn (Primary)
+
+Search titles, not companies:
+
+“Principal Engineer workflow”
+
+“Staff Engineer automation”
+
+“CTO CRM SaaS”
+
+Filter for:
+
+10+ years experience
+
+Currently employed
+
+Not founders of your own startup
+
+2️⃣ Your existing network (HIGH ROI)
+
+Former:
+
+Tech leads
+
+Architects
+
+Senior colleagues
+
+People who reviewed your work before
+
+If someone ever said:
+
+“This design makes sense”
+
+They are a candidate.
+
+3️⃣ Open-source / Tech community (Optional)
+
+Maintainers
+
+Reviewers
+
+Judges you’ve interacted with
+
+This is slower but strong if you already have access.
+
+HOW TO APPROACH THEM (THIS MATTERS)
+❌ WRONG approach
+
+“Can you write me an immigration recommendation?”
+
+Instant rejection.
+
+✅ CORRECT approach (SCRIPT — COPY/PASTE)
+
+Subject:
+
+Request for technical review of a deterministic decision system
+
+Message:
+
+Hi [Name],
+
+I’m reaching out because of your background in [systems / workflow / automation]. I’ve designed a deterministic response-aware decision engine for lead engagement, and I’m looking for a technical peer review, not a recommendation.
+
+I’d value your feedback on whether the system design and decision model are sound and differentiated from conventional automation approaches.
+
+If you’re open, I can share a short architectural overview (FSM + decision logic).
+
+Best,
+Santhosh
+
+Why this works:
+
+You ask for review, not praise
+
+You appeal to their expertise
+
+It feels professional, not transactional
+
+THE CONVERSION STEP (AFTER THEY REVIEW)
+
+Only after they say:
+
+“This is solid / interesting / well-designed”
+
+You say:
+
+Thank you for reviewing this. I’m preparing an O-1 petition and was advised to include independent expert opinions from senior engineers who evaluated the system.
+
+Would you be comfortable providing an expert opinion letter based on your review? I can provide a structured draft aligned with USCIS requirements.
+
+At this point, conversion rate is high.
+
+WHAT TO SEND THEM (NEVER SEND FULL CODE)
+
+Send ONLY:
+
+FSM diagram (Exhibit A)
+
+1-page system overview (you already have this implicitly)
+
+Short explanation of RAF-GS purpose
+
+Do NOT:
+
+dump GitHub repo
+
+ask them to run code
+
+overwhelm them
+
+TIMELINE (REALISTIC)
+
+Week 1–2: Outreach to 10–15 candidates
+
+Week 3–4: 3–5 agree to review
+
+Week 4–6: Secure 2–3 signed letters
+
+This fits comfortably within your Jan 2027 deadline.
