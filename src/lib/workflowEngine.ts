@@ -1,7 +1,7 @@
 // src/lib/workflowEngine.ts
-// Workflow Engine — RAF-GS Adapter Layer
-// NOTE: This file performs orchestration ONLY.
-// All decision logic lives in RAF-GS engine.
+// DEPRECATED / NON-AUTHORITATIVE
+// Runtime uses workflowEngine.js as the canonical server runtime adapter.
+// This file is kept for reference only and should not be used in production.
 
 import { supabase } from "./supabaseClient";
 import { generateText } from "./ollamaClient";
@@ -166,15 +166,19 @@ export class WorkflowEngine {
       });
 
       // --- Audit log (MANDATORY for O-1 evidence) ---
+      // FIX 5: Standardized to use data field for consistency with workflowEngine.js
       await supabase.from("automation_logs").insert({
         user_id: data.user_id,
         lead_id: data.lead_id,
         action_type: automation.action_type,
-        rafgs_decision: decision,
-        rafgs_version: "1.0",
-        engine: "RAF-GS",
-        engine_commit: "2c417e2",
-        executed_at: now.toISOString()
+        executed_at: now.toISOString(),
+        data: {
+          rafgs_decision: decision,
+          rafgs_version: "1.0",
+          engine: "RAF-GS",
+          engine_commit: "2c417e2",
+          trigger_event: automation.trigger_event
+        }
       });
 
       if (decision.action === "SKIP") {

@@ -135,6 +135,15 @@ export default async function handler(req: any, res: any) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
+  // FIX 3: Deprecated - outbound follow-ups are governed exclusively by RAF-GS via workflowEngine.js
+  // This endpoint is disabled to prevent bypassing RAF-GS gating.
+  return res.status(200).json({
+    success: true,
+    message: 'Deprecated: Follow-up automation is now governed exclusively by RAF-GS via workflowEngine.js',
+    messagesSent: 0
+  })
+
+  /* DISABLED CODE - DO NOT USE
   try {
     console.log('Starting follow-up automation cron job...')
     
@@ -230,6 +239,7 @@ export default async function handler(req: any, res: any) {
       details: error instanceof Error ? error.message : 'Unknown error'
     })
   }
+  END DISABLED CODE */
 }
 
 async function findLeadsForFollowUp(automation: Automation): Promise<Lead[]> {

@@ -87,6 +87,9 @@ export class WorkflowEngine {
   async executeAutomation(automation, data) {
     if (!data.lead_id) return;
 
+    // FIX 2: Capture now once for determinism
+    const now = new Date();
+
     // -------------------- Load RAF-GS context --------------------
 
     const [{ data: lead }, { data: messages }] = await Promise.all([
@@ -108,7 +111,7 @@ export class WorkflowEngine {
         : undefined,
       inboundMessageTimes: inboundTimes,
       delayMinutes: automation.delay_minutes,
-      now: new Date()
+      now
     });
 
     // -------------------- Audit log (MANDATORY) --------------------
@@ -117,7 +120,7 @@ export class WorkflowEngine {
       user_id: data.user_id,
       lead_id: data.lead_id,
       action_type: automation.action_type,
-      executed_at: new Date().toISOString(),
+      executed_at: now.toISOString(),
       data: {
         rafgs_decision: decision,
         rafgs_version: RAFGS_ENGINE_VERSION,
@@ -161,7 +164,7 @@ export class WorkflowEngine {
       lead_id: data.lead_id,
       channel: "email",
       direction: "out",
-      sent_at: new Date().toISOString()
+      sent_at: now.toISOString()
     });
 
     // -------------------- FSM transition --------------------
@@ -175,7 +178,7 @@ export class WorkflowEngine {
       .from("leads")
       .update({
         rafgs_state: nextState,
-        last_outbound_at: new Date().toISOString()
+        last_outbound_at: now.toISOString()
       })
       .eq("id", data.lead_id);
   }

@@ -25,12 +25,12 @@ export async function markLeadResponded(leadId: string, responseNotes?: string) 
     }
 
     // Update lead status and RAF-GS state
+    // FIX 4: Removed last_inbound_message (not in schema). Messages table is the source of truth.
     const { error: leadError } = await supabase
       .from('leads')
       .update({
         status: 'contacted', // Use valid status value
         rafgs_state: nextState,
-        last_inbound_message: new Date().toISOString(),
         notes: responseNotes ? `${responseNotes}\n\n[Response received: ${new Date().toLocaleDateString()}]` : undefined
       })
       .eq('id', leadId)

@@ -29,4 +29,4 @@ RAF-GS evaluates outbound eligibility using three explicit inputs:
 RAF-GS governs decision logic only. Message delivery, scheduling, and templates
 are handled by the execution layer.
 
-**Note:** workflowEngine.ts is the authoritative implementation; workflowEngine.js is a transpiled/runtime artifact that mirrors its behavior.
+**Note:** workflowEngine.js is the canonical server runtime adapter. workflowEngine.ts is deprecated and non-authoritative.

@@ -8,7 +8,7 @@ interface SmartLead {
   email: string
   status: string
   last_outbound_message?: string
-  last_inbound_message?: string
+  // FIX 4: Removed last_inbound_message (not in schema). Messages table is the source of truth.
   created_at: string
   notes: string
 }
@@ -19,6 +19,7 @@ export async function findLeadsNeedingFollowUp(userId: string, automationDelayMi
     const cutoffTime = new Date(Date.now() - delayMs).toISOString()
 
     // Get leads that might need follow-up
+    // FIX 4: Removed last_inbound_message from select (not in schema)
     const { data: leads, error } = await supabase
       .from('leads')
       .select(`
@@ -27,7 +28,6 @@ export async function findLeadsNeedingFollowUp(userId: string, automationDelayMi
         email,
         status,
         last_outbound_message,
-        last_inbound_message,
         created_at,
         notes
       `)

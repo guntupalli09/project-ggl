@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+// FIX 3: Integrate RAF-GS for speed-to-lead automation
+import { evaluateRAFGS } from '../../src/engine/rafgsEngine.js'
+import { RAFGSState, RAFGSEvent, transitionState } from '../../src/engine/rafgsFSM.js'
 
 // AI Generation for production
 async function generateAIResponse(prompt: string): Promise<string> {
@@ -103,6 +106,54 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'Failed to generate follow-up message' })
     }
 
+    // FIX 3: Integrate RAF-GS before sending
+    const now = new Date()
+    
+    // Load RAF-GS context
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('sent_at, direction')
+      .eq('lead_id', leadId)
+    
+    const inboundTimes = (messages || [])
+      .filter(m => m.direction === 'in')
+      .map(m => new Date(m.sent_at))
+      .filter(d => !isNaN(d.getTime()))
+    
+    const decision = evaluateRAFGS({
+      currentState: (lead.rafgs_state as RAFGSState) || RAFGSState.NEW,
+      lastOutboundAt: lead.last_outbound_at ? new Date(lead.last_outbound_at) : undefined,
+      inboundMessageTimes: inboundTimes,
+      delayMinutes: 0, // Speed-to-lead: immediate, no delay
+      now
+    })
+    
+    // Log decision
+    await supabase.from('automation_logs').insert({
+      user_id: userId,
+      lead_id: leadId,
+      action_type: 'speed_to_lead',
+      executed_at: now.toISOString(),
+      data: {
+        rafgs_decision: decision,
+        rafgs_version: '1.0',
+        engine: 'RAF-GS',
+        engine_commit: '5216a0d',
+        trigger_event: 'lead_created'
+      }
+    })
+    
+    // Respect RAF-GS decision
+    if (decision.action === 'SKIP') {
+      console.log(`⛔ RAF-GS blocked speed-to-lead for lead ${leadId}:`, decision.rule)
+      return res.status(200).json({
+        success: false,
+        message: 'Speed-to-lead blocked by RAF-GS',
+        reason: decision.rule,
+        leadId: leadId
+      })
+    }
+
     // Send the immediate follow-up email
     try {
       const emailResponse = await fetch(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/api/email/send`, {
@@ -138,7 +189,7 @@ export default async function handler(req: any, res: any) {
         channel: 'email',
         direction: 'out',
         body: followUpMessage,
-        sent_at: new Date().toISOString()
+        sent_at: now.toISOString()
       }])
 
     if (messageError) {
@@ -146,12 +197,19 @@ export default async function handler(req: any, res: any) {
       // Don't fail the automation if message recording fails
     }
 
-    // Update lead status to 'contacted' and last outbound message timestamp
+    // FSM transition
+    const nextState = transitionState(
+      (lead.rafgs_state as RAFGSState) || RAFGSState.NEW,
+      RAFGSEvent.OUTBOUND_SENT
+    )
+
+    // Update lead status to 'contacted' and RAF-GS state
     const { error: leadUpdateError } = await supabase
       .from('leads')
       .update({
         status: 'contacted',
-        last_outbound_message: new Date().toISOString()
+        rafgs_state: nextState,
+        last_outbound_at: now.toISOString()
       })
       .eq('id', leadId)
       .eq('user_id', userId)
