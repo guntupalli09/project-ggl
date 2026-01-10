@@ -1,4 +1,5 @@
 // Workflow Engine for Niche-Specific Automation (RAF-GS authoritative version)
+
 import { createClient } from "@supabase/supabase-js";
 
 import { evaluateRAFGS } from "../engine/rafgsEngine.js";
@@ -8,10 +9,22 @@ import {
   transitionState
 } from "../engine/rafgsFSM.js";
 
-// Supabase (server-side only)
-const supabaseUrl = 'https://rmrhvrptpqopaogrftgl.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtcmh2cnB0cHFvcGFvZ3JmdGdsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTk0MjQ2MiwiZXhwIjoyMDc1NTE4NDYyfQ.RqFSe9piAiMo0GTzt6Y2PNuxDF-am-oTZt8lXQq9__I';
+// -------------------- Supabase (server-side only) --------------------
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error("Missing Supabase environment variables");
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// IMPORTANT: update this on each RAF-GS logic change
+const RAFGS_ENGINE_VERSION = "1.0";
+const RAFGS_ENGINE_COMMIT = "REPLACE_WITH_SHORT_GIT_SHA"; // e.g. "a9f3c2d"
+
+// -------------------------------------------------------------------
 
 export class WorkflowEngine {
   constructor() {
@@ -74,7 +87,8 @@ export class WorkflowEngine {
   async executeAutomation(automation, data) {
     if (!data.lead_id) return;
 
-    // ---- LOAD RAF-GS CONTEXT ----
+    // -------------------- Load RAF-GS context --------------------
+
     const [{ data: lead }, { data: messages }] = await Promise.all([
       supabase.from("leads").select("*").eq("id", data.lead_id).single(),
       supabase
@@ -89,13 +103,16 @@ export class WorkflowEngine {
 
     const decision = evaluateRAFGS({
       currentState: lead.rafgs_state || RAFGSState.NEW,
-      lastOutboundAt: lead.last_outbound_at ? new Date(lead.last_outbound_at) : undefined,
+      lastOutboundAt: lead.last_outbound_at
+        ? new Date(lead.last_outbound_at)
+        : undefined,
       inboundMessageTimes: inboundTimes,
       delayMinutes: automation.delay_minutes,
       now: new Date()
     });
 
-    // ---- AUDIT LOG (MANDATORY) ----
+    // -------------------- Audit log (MANDATORY) --------------------
+
     await supabase.from("automation_logs").insert({
       user_id: data.user_id,
       lead_id: data.lead_id,
@@ -103,8 +120,9 @@ export class WorkflowEngine {
       executed_at: new Date().toISOString(),
       data: {
         rafgs_decision: decision,
-        rafgs_version: "1.0",
+        rafgs_version: RAFGS_ENGINE_VERSION,
         engine: "RAF-GS",
+        engine_commit: RAFGS_ENGINE_COMMIT,
         trigger_event: automation.trigger_event
       }
     });
@@ -113,25 +131,31 @@ export class WorkflowEngine {
       return;
     }
 
-    // ---- EXECUTION ----
+    // -------------------- Execute action --------------------
+
     switch (automation.action_type) {
       case "send_review_request":
         await this.sendReviewRequest(data);
         break;
+
       case "send_referral_offer":
         await this.sendReferralOffer(data);
         break;
+
       case "update_lead_status":
         await this.updateLeadStatus(data);
         break;
+
       case "send_booking_confirmation":
         await this.sendBookingConfirmation(data);
         break;
+
       default:
         return;
     }
 
-    // ---- RECORD OUTBOUND MESSAGE ----
+    // -------------------- Record outbound message --------------------
+
     await supabase.from("messages").insert({
       user_id: data.user_id,
       lead_id: data.lead_id,
@@ -140,7 +164,8 @@ export class WorkflowEngine {
       sent_at: new Date().toISOString()
     });
 
-    // ---- FSM TRANSITION ----
+    // -------------------- FSM transition --------------------
+
     const nextState = transitionState(
       lead.rafgs_state || RAFGSState.NEW,
       RAFGSEvent.OUTBOUND_SENT
@@ -155,7 +180,7 @@ export class WorkflowEngine {
       .eq("id", data.lead_id);
   }
 
-  // ---------------- EXECUTION HELPERS ----------------
+  // -------------------- Execution helpers --------------------
 
   async sendReviewRequest(data) {
     const { createReviewRequest, getReviewRequestData } =
