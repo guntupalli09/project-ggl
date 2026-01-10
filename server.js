@@ -10,14 +10,15 @@ import { createClient } from '@supabase/supabase-js'
 // Load environment variables
 dotenv.config()
 
-// Initialize Supabase client with service role key for server-side operations
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-)
+// Server-side Supabase client (service role only)
+const url = process.env.SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-console.log('Supabase URL:', process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)
-console.log('Service Role Key available:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+if (!url || !key) {
+  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(url, key);
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
