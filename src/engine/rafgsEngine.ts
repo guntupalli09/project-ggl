@@ -10,7 +10,7 @@ export interface RAFGSEngineInput {
   // Last outbound timestamp (if any)
   lastOutboundAt?: Date;
 
-  // All inbound message timestamps (or just the latest; we accept array for correctness)
+  // All inbound message timestamps
   inboundMessageTimes: Date[];
 
   // Delay rule for time-gating follow-ups
@@ -31,7 +31,7 @@ export function evaluateRAFGS(input: RAFGSEngineInput): RAFGSDecision {
   const now = input.now;
   const delayMinutes = input.delayMinutes;
 
-  // 1) State block: do not send if PAUSED or CLOSED or ENGAGED (ENGAGED = replied)
+  // 1) State block: PAUSED or CLOSED
   if (
     input.currentState === RAFGSState.PAUSED ||
     input.currentState === RAFGSState.CLOSED
@@ -41,27 +41,36 @@ export function evaluateRAFGS(input: RAFGSEngineInput): RAFGSDecision {
       rule: RAFGSRule.STATE_BLOCK,
       explanation: `Outreach blocked because lead state is ${input.currentState}.`,
       currentState: input.currentState,
-      evidence: buildEvidence(input, { inboundAfterOutbound: false })
+      evidence: buildEvidence(input, {
+        inboundAfterOutbound: false
+      })
     });
   }
 
-  // ENGAGED means we should not follow up automatically (reply received)
+  // 2) ENGAGED: inbound response received → suppress all follow-ups
   if (input.currentState === RAFGSState.ENGAGED) {
+    const latestInboundAt = latestDate(input.inboundMessageTimes);
+
     return decision({
       action: "SKIP",
       rule: RAFGSRule.STATE_BLOCK,
-      explanation: "Outreach suppressed because lead is ENGAGED (inbound response received).",
+      explanation:
+        "Outreach suppressed because lead is ENGAGED (inbound response received).",
       currentState: input.currentState,
-      evidence: buildEvidence(input, { inboundAfterOutbound: true })
+      evidence: buildEvidence(input, {
+        inboundAfterOutbound: true,
+        latestInboundAt
+      })
     });
   }
 
-  // 2) Compute inbound-after-outbound suppression
+  // 3) Compute inbound-after-outbound suppression
   const lastOutboundAt = input.lastOutboundAt;
   const latestInboundAt = latestDate(input.inboundMessageTimes);
 
   const inboundAfterOutbound =
-    !!latestInboundAt && (!lastOutboundAt || latestInboundAt > lastOutboundAt);
+    !!latestInboundAt &&
+    (!lastOutboundAt || latestInboundAt > lastOutboundAt);
 
   if (inboundAfterOutbound) {
     return decision({
@@ -70,21 +79,26 @@ export function evaluateRAFGS(input: RAFGSEngineInput): RAFGSDecision {
       explanation:
         "Follow-up suppressed because inbound response occurred after the last outbound message.",
       currentState: input.currentState,
-      evidence: buildEvidence(input, { inboundAfterOutbound, latestInboundAt })
+      evidence: buildEvidence(input, {
+        inboundAfterOutbound,
+        latestInboundAt
+      })
     });
   }
 
-  // 3) Time gating (only if we have an outbound baseline; if none, treat as eligible for first touch)
+  // 4) Time gating
   if (lastOutboundAt) {
     const elapsedMs = now.getTime() - lastOutboundAt.getTime();
     const delayMs = delayMinutes * 60 * 1000;
 
     if (elapsedMs < delayMs) {
       const nextEligibleAt = new Date(lastOutboundAt.getTime() + delayMs);
+
       return decision({
         action: "SKIP",
         rule: RAFGSRule.TIME_GATE,
-        explanation: "Delay window has not elapsed; lead is not yet eligible for follow-up.",
+        explanation:
+          "Delay window has not elapsed; lead is not yet eligible for follow-up.",
         currentState: input.currentState,
         evidence: buildEvidence(input, {
           inboundAfterOutbound,
@@ -94,15 +108,19 @@ export function evaluateRAFGS(input: RAFGSEngineInput): RAFGSDecision {
     }
   }
 
-  // 4) Eligible
+  // 5) Eligible
   return decision({
     action: "SEND",
     rule: RAFGSRule.ELIGIBLE,
     explanation: "Lead is eligible for outreach under RAF-GS rules.",
     currentState: input.currentState,
-    evidence: buildEvidence(input, { inboundAfterOutbound })
+    evidence: buildEvidence(input, {
+      inboundAfterOutbound
+    })
   });
 }
+
+/* -------------------- Helpers -------------------- */
 
 function decision(d: RAFGSDecision): RAFGSDecision {
   return d;
@@ -122,7 +140,8 @@ function buildEvidence(
   }
 ): RAFGSEvidence {
   const lastOutboundAt = input.lastOutboundAt;
-  const latestInboundAt = extra.latestInboundAt ?? latestDate(input.inboundMessageTimes);
+  const latestInboundAt =
+    extra.latestInboundAt ?? latestDate(input.inboundMessageTimes);
 
   const evidence: RAFGSEvidence = {
     now: input.now.toISOString(),
@@ -144,9 +163,10 @@ function buildEvidence(
   if (extra.nextEligibleAt) {
     evidence.nextEligibleAt = extra.nextEligibleAt.toISOString();
   } else if (lastOutboundAt) {
-    // If we can compute a next eligible time deterministically, include it
     const delayMs = input.delayMinutes * 60 * 1000;
-    evidence.nextEligibleAt = new Date(lastOutboundAt.getTime() + delayMs).toISOString();
+    evidence.nextEligibleAt = new Date(
+      lastOutboundAt.getTime() + delayMs
+    ).toISOString();
   }
 
   return evidence;
